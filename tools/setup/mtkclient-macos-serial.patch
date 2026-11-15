@@ -5,7 +5,7 @@ preloader handshake ends in "Sync error" and the DA upload stops half-way.
 
 1. Port.run_serial_handshake: the preloader sends "READY" as soon as its port opens. Those bytes
    were read as handshake echoes, shifting every later reply. Drain the input before the handshake
-   and after each mismatch. (Not fixed upstream as of 2026-11.)
+   and after each mismatch. Reported as bkerler/mtkclient#458 (not fixed upstream as of 2026-11).
 2. SerialClass.usbread: with no timeout given (e.g. a DA ACK), wait up to the class default (1 s)
    instead of 20 ms.
 3. SerialClass.write / flush: pyserial's flushOutput() is reset_output_buffer(), which discards
