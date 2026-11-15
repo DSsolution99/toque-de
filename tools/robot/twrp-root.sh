@@ -21,7 +21,14 @@ die() { echo "ERROR: $*"; exit 1; }
 echo "== 1. Magisk: patching the original boot"
 rm -rf $T/magisk
 mkdir -p $T/magisk/apk && cd $T/magisk || die "cannot create $T/magisk"
-unzip -o -q $T/magisk.apk -d apk || die "cannot unzip magisk.apk"
+# TWRP's busybox (1.22) unzip reads entries in order and, after extracting the last one, stops on
+# the zero padding before the APK Signing Block: "invalid zip magic 00000000", exit code 1. Every
+# entry is extracted (and CRC-checked) by then, so that error alone is not fatal; the copies below
+# check that each needed file is there.
+if ! unzip -o -q $T/magisk.apk -d apk 2> $T/unzip.err; then
+  grep -q "invalid zip magic 00000000" $T/unzip.err || { cat $T/unzip.err; die "cannot unzip magisk.apk"; }
+fi
+rm -f $T/unzip.err
 for f in boot_patch.sh util_functions.sh stub.apk; do
   cp apk/assets/$f . || die "$f missing: is this a Magisk APK?"
 done

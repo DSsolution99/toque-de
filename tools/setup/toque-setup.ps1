@@ -408,8 +408,12 @@ function Step-Android {
     }
     $expected = (Get-State)["boot-magisk-sha256"]
     if ($expected) {
-        $bb = "/data/adb/magisk/busybox"
-        $flashed = Adb shell "su -c '$bb head -c $PartitionSize $ByName/boot | $bb sha256sum'"
+        # Magisk's busybox is only copied to /data/adb/magisk by 'install' (setup-root.sh): until
+        # then, use the copy inside the Magisk app installed just above. Single quotes: no
+        # PowerShell expansion, $b and $(...) are for the robot's shell.
+        $pick = 'b=/data/adb/magisk/busybox; [ -x $b ] || b=$(ls /data/app/com.topjohnwu.magisk*/lib/arm*/libbusybox.so 2>/dev/null | head -n 1)'
+        $remote = $pick + '; $b head -c ' + $PartitionSize + ' ' + $ByName + '/boot | $b sha256sum'
+        $flashed = Adb shell ("su -c '" + $remote + "'")
         if ($flashed -notmatch $expected) { Say ("WARNING: the boot partition differs from boot-magisk.img (" + $flashed + ")") }
         else { Ok "boot partition = boot-magisk.img" }
     }

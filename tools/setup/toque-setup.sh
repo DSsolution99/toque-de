@@ -12,11 +12,14 @@
 # macOS port of toque-setup.ps1. SP Flash Tool and its Windows driver are replaced by mtkclient
 # (github.com/bkerler/mtkclient, no driver needed), used only where the robot's MediaTek download
 # mode is required: 'backup' and 'flash-twrp'. 'flash-root' and 'unroot' write from TWRP instead.
-# Every write is read back and compared with its image.
+# Every write is read back and compared with its image. mtkclient runs through the macOS serial
+# driver, with the fixes in tools/setup/mtkclient-macos-serial.patch ('prepare' applies them and
+# the download-mode steps refuse to run without them).
 #
 # Options: --work DIR (default ~/Toque), --apk FILE, --ip ROBOT_IP, --wait-seconds N (adb, default
-# 180), --mtk-timeout N (download mode, default 1800), --serial (mtkclient through the macOS serial
-# driver instead of libusb), --download-mode ('unroot' through download mode instead of TWRP).
+# 180), --mtk-timeout N (download mode, default 1800), --libusb (mtkclient through libusb instead
+# of the macOS serial driver; --serial, the default, is still accepted), --download-mode ('unroot'
+# through download mode instead of TWRP).
 set -u
 set -o pipefail
 
@@ -27,12 +30,12 @@ APK=""
 IP=""
 WAIT_SECONDS=180
 MTK_TIMEOUT=1800
-MTK_SERIAL=0
+MTK_SERIAL=1   # macOS serial driver: the only way that worked on a real robot (libusb: handshake fails)
 DOWNLOAD_MODE=0
 
 usage() {
   echo "Usage: tools/setup/toque-setup.sh <step> [--work DIR] [--apk FILE] [--ip ROBOT_IP]"
-  echo "       [--wait-seconds N] [--mtk-timeout N] [--serial] [--download-mode]"
+  echo "       [--wait-seconds N] [--mtk-timeout N] [--libusb] [--download-mode]"
   echo "Steps: $STEPS"
 }
 opt_value() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "Option $1 needs a value." >&2; usage >&2; exit 1; }; }
@@ -45,6 +48,7 @@ while [ $# -gt 0 ]; do
     --wait-seconds) opt_value "$@"; WAIT_SECONDS=$2; shift 2 ;;
     --mtk-timeout) opt_value "$@"; MTK_TIMEOUT=$2; shift 2 ;;
     --serial) MTK_SERIAL=1; shift ;;
+    --libusb) MTK_SERIAL=0; shift ;;
     --download-mode) DOWNLOAD_MODE=1; shift ;;
     -h | --help) usage; exit 0 ;;
     -*) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -67,6 +71,7 @@ LOG="$WORK/setup-log.txt"
 MTK_SRC="$WORK/mtkclient/src"
 MTK_VENV="$WORK/mtkclient/venv"
 MTK_RUN="$WORK/mtkclient/run"
+MTK_PATCH="$REPO/tools/setup/mtkclient-macos-serial.patch"
 
 # Known-good files (SHA-256). The scatter and TWRP come from github.com/EliasKotlyar/Monsieur-Cuisine-Connect-Hack.
 MAGISK_URL="https://github.com/topjohnwu/Magisk/releases/download/v31.0/Magisk-v31.0.apk"
@@ -203,9 +208,15 @@ find_libusb() { # folder holding libusb-1.0.dylib (Homebrew: brew install libusb
   done
   return 1
 }
+mtk_pinned() { [ "$(git -C "$MTK_SRC" rev-parse HEAD 2> /dev/null)" = "$MTK_COMMIT" ]; }
+# The pinned commit with exactly the macOS serial fixes: the patch is applied (it reverses
+# cleanly) and no other tracked file differs.
+mtk_patched() {
+  git -C "$MTK_SRC" apply --reverse --check "$MTK_PATCH" 2> /dev/null &&
+    [ "$(git -C "$MTK_SRC" diff --name-only | sort)" = "$(git -C "$MTK_SRC" apply --numstat "$MTK_PATCH" | awk '{print $3}' | sort)" ]
+}
 mtk_ready() {
-  [ -x "$MTK_VENV/bin/python" ] && [ -f "$MTK_SRC/mtk.py" ] &&
-    [ "$(git -C "$MTK_SRC" rev-parse HEAD 2> /dev/null)" = "$MTK_COMMIT" ]
+  [ -x "$MTK_VENV/bin/python" ] && [ -f "$MTK_SRC/mtk.py" ] && mtk_pinned && mtk_patched
 }
 # mtkclient's own code looks for "libusb-1.0.so" on macOS; pyusb then finds Homebrew's libusb
 # through DYLD_FALLBACK_LIBRARY_PATH. 'exec' so that the caller's $! is mtkclient itself.
@@ -218,13 +229,21 @@ mtk_exec() {
 }
 
 install_mtkclient() { # needs $PY, git and libusb
-  if ! mtk_ready || [ -n "$(git -C "$MTK_SRC" status --porcelain --untracked-files=no 2> /dev/null)" ]; then
-    rm -rf "$MTK_SRC"
-    say "Downloading mtkclient $MTK_TAG"
-    git -c advice.detachedHead=false clone -q --depth 1 --branch "$MTK_TAG" "$MTK_URL" "$MTK_SRC" ||
-      fail "Could not download mtkclient from $MTK_URL"
-    [ "$(git -C "$MTK_SRC" rev-parse HEAD)" = "$MTK_COMMIT" ] ||
-      fail "mtkclient $MTK_TAG is not commit $MTK_COMMIT: do not use it."
+  [ -f "$MTK_PATCH" ] || fail "$MTK_PATCH missing: get the whole repository again."
+  if ! { [ -f "$MTK_SRC/mtk.py" ] && mtk_pinned && mtk_patched; }; then
+    # A clean clone of the pinned commit only needs the patch; anything else is downloaded again.
+    if ! { [ -f "$MTK_SRC/mtk.py" ] && mtk_pinned &&
+      [ -z "$(git -C "$MTK_SRC" status --porcelain --untracked-files=no 2> /dev/null)" ]; }; then
+      rm -rf "$MTK_SRC"
+      say "Downloading mtkclient $MTK_TAG"
+      git -c advice.detachedHead=false clone -q --depth 1 --branch "$MTK_TAG" "$MTK_URL" "$MTK_SRC" ||
+        fail "Could not download mtkclient from $MTK_URL"
+      mtk_pinned || fail "mtkclient $MTK_TAG is not commit $MTK_COMMIT: do not use it."
+    fi
+    if ! git -C "$MTK_SRC" apply "$MTK_PATCH" || ! mtk_patched; then
+      fail "Could not apply $(basename "$MTK_PATCH") to mtkclient: do not use download mode."
+    fi
+    ok "mtkclient: macOS serial fixes applied ($(basename "$MTK_PATCH"))"
   fi
   if ! "$MTK_VENV/bin/python" -s -c 'import usb, serial, Cryptodome, colorama' > /dev/null 2>&1; then
     rm -rf "$MTK_VENV"
@@ -236,7 +255,7 @@ install_mtkclient() { # needs $PY, git and libusb
   mkdir -p "$MTK_RUN"
   (mtk_exec --help) > "$WORK/mtkclient/help.txt" 2>&1 ||
     fail "mtkclient does not start: see $WORK/mtkclient/help.txt"
-  ok "mtkclient $MTK_TAG ($MTK_COMMIT)"
+  ok "mtkclient $MTK_TAG ($MTK_COMMIT) + macOS serial fixes"
 }
 
 # One mtkclient session: waits for the robot in download mode, then runs <commands> (separated by
@@ -249,6 +268,7 @@ run_mtk_session() { # run_mtk_session <label> <commands>
   : > "$MTK_OUT"
   say "Running mtkclient ($1): $2"
   if [ "$MTK_SERIAL" = 1 ]; then
+    say "(Through the macOS serial driver, mtkclient prints 'Handshake failed, retrying...' about every 10 seconds while it waits for the robot: that is normal.)"
     (mtk_exec --serialport DETECT multi "$2") >> "$MTK_OUT" 2>&1 &
   else
     (mtk_exec multi "$2") >> "$MTK_OUT" 2>&1 &
@@ -300,7 +320,7 @@ mtk_write_verified() { # mtk_write_verified <label> <partition> <image> [<partit
 mtk_check_written() { # mtk_check_written <partition> <image>
   local check="$MTK_RUN/toque-$1-check.img"
   [ -f "$check" ] && [ "$(sha "$check")" = "$(sha "$2")" ] ||
-    fail "$1 could not be verified after writing $(basename "$2") (see $MTK_OUT). The robot's preloader is untouched, so download mode still works: run '$STEP' again."
+    fail "$1 could not be verified after writing $(basename "$2") (see $MTK_OUT). The robot's preloader is untouched, so download mode still works: switch the robot OFF, then run '$STEP' again."
   rm -f "$check" "$MTK_RUN/toque-$1.img"
   ok "$1 = $(basename "$2") (read back and verified)"
 }
@@ -346,7 +366,7 @@ step_status() {
   say "Python 3.10+: $py"
   lib=$(find_libusb) || lib="missing (brew install libusb)"
   say "libusb: $lib"
-  if mtk_ready; then say "mtkclient: $MTK_TAG"; else say "mtkclient: not installed ('prepare')"; fi
+  if mtk_ready; then say "mtkclient: $MTK_TAG + macOS serial fixes"; else say "mtkclient: not installed or not patched ('prepare')"; fi
   if ADB=$(find_adb); then say "adb state: $(adb_state)"; else ADB=""; say "adb: missing ('prepare')"; fi
   for o in prepare backup flash-twrp root flash-root android install wifi; do
     state_has "done-$o" || { say "Next step: $o"; return; }
@@ -435,14 +455,14 @@ step_prepare() {
 step_backup() {
   local boot="$BACKUP/boot-original.img" rec="$BACKUP/recovery-original.img"
   if [ ! -f "$boot" ] || [ ! -f "$rec" ]; then
-    mtk_ready || fail "mtkclient missing: run 'prepare'."
+    mtk_ready || fail "mtkclient missing or without its macOS serial fixes: run 'prepare'."
     check_layout
     human "Switch the robot OFF with its rear switch (it can stay plugged into the mains). Unscrew the maintenance cover under the robot (small Torx). Plug the USB A-A cable into the RIGHT-HAND port marked 'Android USB' (never the other one: it can destroy the board) and into the Mac."
     usb_hint
     rm -f "$MTK_RUN/boot-original.img" "$MTK_RUN/recovery-original.img"
     run_mtk_session backup "ro $BOOT_OFFSET $(hex $PARTITION_SIZE) boot-original.img --parttype user;ro $RECOVERY_OFFSET $(hex $PARTITION_SIZE) recovery-original.img --parttype user"
     [ -f "$MTK_RUN/boot-original.img" ] && [ -f "$MTK_RUN/recovery-original.img" ] ||
-      fail "Readback produced no files (see $MTK_OUT). Nothing was written to the robot. Check the cable and port, then run 'backup' again (with --serial if mtkclient never finds the robot; see AGENTS.md)."
+      fail "Readback produced no files (see $MTK_OUT). Nothing was written to the robot. Switch the robot OFF (after a failed session it stays in download mode, black screen), check the cable and port, then run 'backup' again (see AGENTS.md, 'When mtkclient does not reach the robot')."
     # Checked where mtkclient wrote them: a bad readback never lands in the backup folder.
     check_boot_image "$MTK_RUN/boot-original.img" "the boot readback"
     check_boot_image "$MTK_RUN/recovery-original.img" "the recovery readback"
@@ -465,7 +485,7 @@ step_backup() {
 step_flash_twrp() {
   state_has done-backup || fail "Run 'backup' first: never flash without the backups."
   check_twrp
-  mtk_ready || fail "mtkclient missing: run 'prepare'."
+  mtk_ready || fail "mtkclient missing or without its macOS serial fixes: run 'prepare'."
   check_layout
   mtk_write_verified flash-twrp boot "$HACK/recovery.img"
   mtk_check_written boot "$HACK/recovery.img"
@@ -519,7 +539,7 @@ step_flash_root() {
 }
 
 step_android() {
-  local st magisk_v pkgs id expected flashed bb=/data/adb/magisk/busybox
+  local st magisk_v pkgs id expected flashed pick
   resolve_adb
   st=$(wait_adb_state "$WAIT_SECONDS" device unauthorized)
   [ "$st" = unauthorized ] && need_human "The robot asks to allow USB debugging: tick 'Always allow' and tap OK on its screen."
@@ -533,7 +553,11 @@ step_android() {
   [ "$id" = 0 ] || need_human "On the robot's screen, Magisk asks for superuser access for 'Shell': tap GRANT (Autoriser) within 10 seconds. Then run 'android' again."
   expected=$(state_get boot-magisk-sha256)
   if [ -n "$expected" ]; then
-    flashed=$(adb_run shell "su -c '$bb head -c $PARTITION_SIZE $BYNAME/boot | $bb sha256sum'")
+    # Magisk's busybox is only copied to /data/adb/magisk by 'install' (setup-root.sh): until then,
+    # use the copy inside the Magisk app installed just above.
+    # shellcheck disable=SC2016 # $b and $(...) are expanded by the robot's shell, not here
+    pick='b=/data/adb/magisk/busybox; [ -x $b ] || b=$(ls /data/app/com.topjohnwu.magisk*/lib/arm*/libbusybox.so 2>/dev/null | head -n 1)'
+    flashed=$(adb_run shell "su -c '$pick; \$b head -c $PARTITION_SIZE $BYNAME/boot | \$b sha256sum'")
     case "$flashed" in *"$expected"*) ok "boot partition = boot-magisk.img" ;; *) say "WARNING: the boot partition differs from boot-magisk.img ($flashed)" ;; esac
   fi
   state_set done-android "$(now)"
@@ -589,7 +613,7 @@ step_unroot() {
       fail "The backups differ from the ones verified by 'backup': restore them from your second copy."
   fi
   if [ "$DOWNLOAD_MODE" = 1 ]; then
-    mtk_ready || fail "mtkclient missing: run 'prepare'."
+    mtk_ready || fail "mtkclient missing or without its macOS serial fixes: run 'prepare'."
     check_layout
     mtk_write_verified unroot boot "$boot" recovery "$rec"
     mtk_check_written boot "$boot"

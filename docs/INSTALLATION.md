@@ -13,9 +13,12 @@ the robot's tablet unusable. Read everything before you start.
 This macOS version replaces SP Flash Tool and its Windows driver with
 [mtkclient](https://github.com/bkerler/mtkclient), for the two operations that need the robot's
 MediaTek download mode (the backup and the first TWRP write). The original procedure was done on a
-real robot from Windows; the macOS one does the same reads and writes at the same addresses, but
-has **not been tried on a robot yet**. If mtkclient cannot reach the robot, nothing is written: see
-*If mtkclient does not reach the robot* below.
+real robot from Windows; the macOS one does the same reads and writes at the same addresses, and
+was done end to end on **one** real robot (SKMC 1200 C3) from an Apple silicon Mac in November
+2026. It needed three fixes to mtkclient for the macOS serial driver:
+[tools/setup/mtkclient-macos-serial.patch](../tools/setup/mtkclient-macos-serial.patch), applied by
+`prepare`. If mtkclient cannot reach the robot, nothing is written: see *If mtkclient does not
+reach the robot* below.
 
 Menu names below are those of the English interface (*Settings › Langue · Language › English*).
 
@@ -54,8 +57,11 @@ package is missing. The commands below use those paths.
    `~/Toque/backup/boot-original.img` and `recovery-original.img` (16 MB each); the script checks
    them. **Keep them safe, they are your only way back** (copy them to a USB stick or the cloud).
    By hand, from `~/Toque/mtkclient/run`, it is
-   `DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib" ../venv/bin/python ../src/mtk.py multi "ro 0x1d20000 0x1000000 boot-original.img --parttype user;ro 0x2d20000 0x1000000 recovery-original.img --parttype user"`
-   (the libusb path is needed on Apple silicon).
+   `DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib" ../venv/bin/python ../src/mtk.py --serialport DETECT multi "ro 0x1d20000 0x1000000 boot-original.img --parttype user;ro 0x2d20000 0x1000000 recovery-original.img --parttype user"`
+   (the libusb path is needed on Apple silicon; `--serialport` only works with the fixes that
+   `prepare` applies). While it waits, mtkclient prints *Handshake failed, retrying...* every 10
+   seconds: that is normal. After each session the robot stays in download mode (black screen):
+   switch it off before the next one.
 4. `bash tools/setup/toque-setup.sh flash-twrp`: robot off, cable in, switch it on when asked. It
    writes TWRP (`hacks/recovery.img`) into `boot` only and reads it back to check it.
 5. Switch the robot off, unplug the cable, switch it on: **TWRP** starts. Plug the cable back in:
@@ -65,8 +71,10 @@ package is missing. The commands below use those paths.
 
 - Check the cable, the port and the adapter first. Right after switching the robot on,
   `system_profiler SPUSBDataType` should list a **MT65xx Preloader** (vendor ID `0x0e8d`).
-- If mtkclient sees the preloader but the handshake fails, add `--serial` to the step: mtkclient
-  then goes through the macOS serial driver, like SP Flash Tool does on Windows.
+- If mtkclient sees the robot but stops with *Sync error* or *Failed to upload da*: run `prepare`
+  (`status` must say *mtkclient: v2.1.4.1 + macOS serial fixes*), switch the robot off, and run the
+  step again. The steps go through the macOS serial driver, like SP Flash Tool does on Windows;
+  `--libusb` tries libusb instead (it never got past the handshake on the robot it was tried on).
 - Otherwise, do the backup and the TWRP write on a Windows PC with the original guide
   ([Wuki60/MrCuisineVibeConnect](https://github.com/Wuki60/MrCuisineVibeConnect/blob/main/docs/INSTALLATION.md),
   SP Flash Tool), copy the two backups into `~/Toque/backup/`, run `backup` on the Mac (it only checks

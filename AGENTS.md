@@ -25,20 +25,24 @@ USB): on a Mac this is done by **mtkclient**. Everything else goes through **adb
 boot is written from TWRP. Total time 1–2 hours, most of it waiting for the person.
 
 **What has been tried where.** The procedure was done end to end on a real robot in October 2026
-from Windows, with SP Flash Tool. The macOS scripts do the same reads and writes at the same
-addresses, and every write is read back and compared. They were tested on a Mac against simulated
-download mode and simulated partitions, but **not yet on a real robot**. mtkclient supports the
-MT6580, but on macOS it has an open report of a failed preloader handshake with a similar chip
-([bkerler/mtkclient#333](https://github.com/bkerler/mtkclient/issues/333)). If download mode does
-not work from the Mac, see [When mtkclient does not reach the robot](#when-mtkclient-does-not-reach-the-robot).
-Tell the person this before starting.
+from Windows, with SP Flash Tool, and on **15 November 2026 from a Mac** (Apple silicon) on another
+real robot (SKMC 1200 **C3**), with these scripts. On the Mac, stock mtkclient v2.1.4.1 did not
+work: through libusb the preloader handshake always failed (as in
+[bkerler/mtkclient#333](https://github.com/bkerler/mtkclient/issues/333)), and through the macOS
+serial driver three bugs stopped it (*Sync error*, then the DA upload stopped half-way). `prepare`
+now applies the fixes, [tools/setup/mtkclient-macos-serial.patch](tools/setup/mtkclient-macos-serial.patch),
+and the script uses the serial driver by default. With them, `backup` and two later read-backs
+gave identical images, and `flash-twrp` wrote and verified TWRP. That is one robot and one Mac:
+if download mode does not work from the Mac, see
+[When mtkclient does not reach the robot](#when-mtkclient-does-not-reach-the-robot). Tell the
+person this before starting.
 
 ## Rules for the agent
 
 - **Talk to the person in their language**, in short messages. Before starting, tell them what
   they will need (list below), that it voids the warranty, that a mistake can leave the robot's
-  tablet unusable, that the macOS download-mode path has not been tried on a robot yet, and get a
-  clear *yes*.
+  tablet unusable, that the macOS download-mode path has worked on one robot so far (after fixes
+  to mtkclient that `prepare` now applies), and get a clear *yes*.
 - **Never skip the backup step**, never write anything other than `boot` and `recovery`, and never
   run other mtkclient commands than the ones the script runs (no erase, no full-flash write, no
   preloader or other partitions).
@@ -91,14 +95,18 @@ A log is kept in `~/Toque/setup-log.txt`, state in `~/Toque/state.txt`, mtkclien
 **Download-mode steps** (`backup`, `flash-twrp`, `unroot --download-mode`) wait for the robot to be
 switched on, for up to 30 minutes (`--mtk-timeout SECONDS`). Run them in the background or with a
 long timeout. Relay the power instructions before starting: robot off, cable in. Then, once the
-output says mtkclient is waiting for the device, tell the person to switch the robot on.
+output says mtkclient is waiting for the device (*Waiting for PreLoader VCOM*), tell the person to
+switch the robot on, **once**. While it waits, mtkclient prints *Handshake failed, retrying...*
+about every 10 seconds: that is normal. After a session (failed or not), the robot stays in
+download mode with a black screen until it is switched off: before running another download-mode
+step, have the person switch it off. `ls /dev/cu.usbmodem*` lists nothing once it is really off.
 
 ## Procedure
 
 | # | Step | Who | What happens |
 |---|------|-----|--------------|
 | 0 | clone | agent | Get this repository on the Mac (git clone or a ZIP). |
-| 1 | `prepare` | agent | Downloads adb, Magisk v31.0, TWRP and the scatter file, the latest Toque APK, mtkclient v2.1.4.1 and its Python packages (into `~/Toque/mtkclient`); checks every SHA-256 and the mtkclient commit. Says which Homebrew packages are missing, if any. |
+| 1 | `prepare` | agent | Downloads adb, Magisk v31.0, TWRP and the scatter file, the latest Toque APK, mtkclient v2.1.4.1 and its Python packages (into `~/Toque/mtkclient`); checks every SHA-256 and the mtkclient commit, applies the macOS serial fixes. Says which Homebrew packages are missing, if any. |
 | 2 | `backup` | person, then agent | Cover off, cable in the **right-hand "Android USB" port**, robot off; mtkclient reads `boot` and `recovery` when the person switches the robot on. Verifies two 16 MiB Android images before keeping them. |
 | 3 | `flash-twrp` | agent + person | Writes TWRP into `boot` in download mode and reads it back. The person power-cycles: off, **unplug**, on, plug back → TWRP. |
 | 4 | `root` | agent | In TWRP: patches the *original* boot with Magisk, enables ADB in Android, authorizes the Mac's ADB key, pulls `boot-magisk.img`. |
@@ -131,9 +139,12 @@ In order:
    the Mac. In `~/Toque/mtk-<step>-out.txt`, *"Waiting for device"* that never changes means macOS
    never saw the robot. `system_profiler SPUSBDataType` run right after switching the robot on
    should list a **MT65xx Preloader** device (vendor ID `0x0e8d`).
-2. If mtkclient sees the preloader but the handshake fails, run the step again with `--serial`:
-   mtkclient then talks through the macOS serial driver (`/dev/cu.usbmodem…`), the way SP Flash Tool
-   uses its serial driver on Windows.
+2. If mtkclient sees the robot (*Detected 0xe8d:0x2000 device at /dev/cu.usbmodem…*) but stops
+   with *Sync error* or *Failed to upload da*: check that `status` says *mtkclient: v2.1.4.1 + macOS
+   serial fixes* (else run `prepare`), have the person switch the robot off, and run the step
+   again. The step talks through the macOS serial driver (`/dev/cu.usbmodem…`), the way SP Flash Tool
+   uses its serial driver on Windows; `--libusb` tries libusb instead, which never got past the
+   handshake on the robot it was tried on.
 3. If it still fails: do **only the two download-mode steps on a Windows PC** with the original
    project ([toque-setup.ps1](tools/setup/toque-setup.ps1), still in this repository: `-Step prepare`,
    `driver`, `backup`, `flash-twrp`). Copy `C:\Toque\backup\boot-original.img` and
@@ -152,7 +163,7 @@ Nothing is ever written when mtkclient cannot connect.
 | TWRP `hacks/recovery.img` | [EliasKotlyar/Monsieur-Cuisine-Connect-Hack](https://github.com/EliasKotlyar/Monsieur-Cuisine-Connect-Hack) | SHA-256 `fc9ac999fc3b0a6c0cb563f39359084a6fcc211aeb42e7b754990afa4b543d3e` |
 | Scatter `l706_dfbh_v_695scatter.txt` | same repository | SHA-256 `13b8260dba9e4efba874c09e35803af43cc69556ba0f1937226240b0ab318364`; `boot` at `0x1d20000` and `recovery` at `0x2d20000` (16 MiB each) are checked in it |
 | Toque `Toque-X.Y.Z.apk` | [latest release](https://github.com/Wuki60/MrCuisineVibeConnect/releases/latest) of the original repository | (signed with the project key) |
-| mtkclient v2.1.4.1 | `git clone` of [bkerler/mtkclient](https://github.com/bkerler/mtkclient) | commit `5a863eece86fcaa97cb8325cf747e0aae3c307e4` |
+| mtkclient v2.1.4.1 | `git clone` of [bkerler/mtkclient](https://github.com/bkerler/mtkclient) | commit `5a863eece86fcaa97cb8325cf747e0aae3c307e4`, then [mtkclient-macos-serial.patch](tools/setup/mtkclient-macos-serial.patch) applied; download-mode steps refuse to run unless exactly that is in place |
 | mtkclient's Python packages | PyPI, [tools/setup/mtkclient-requirements.txt](tools/setup/mtkclient-requirements.txt) | pinned versions and SHA-256 (`pip --require-hashes`) |
 
 mtkclient's graphical interface (PySide6) and FUSE support are not installed: they are not needed,
@@ -164,11 +175,14 @@ and without macFUSE the FUSE package stops mtkclient from starting
 | Symptom | Cause | Fix |
 |---|---|---|
 | mtkclient waits forever (*Waiting for device*) | A↔C cable, wrong port, USB-C port without adapter, or the robot was already on | A↔A cable, right-hand "Android USB" port, USB-C → USB-A adapter; robot off, then on while the step waits |
-| mtkclient sees the preloader, then *Handshake failed* | macOS USB access | Run the step again with `--serial`; else the Windows fallback above |
+| *Handshake failed, retrying...* every 10 s | Normal while mtkclient waits for the robot (serial driver) | Have the person switch the robot on, once |
+| mtkclient sees the robot, then *Sync error* or *Failed to upload da* | mtkclient without its macOS serial fixes, or the robot was already in download mode | `prepare`; robot off; run the step again; else the Windows fallback above |
+| Black screen, `/dev/cu.usbmodem…` still there after a download-mode step | The robot stays in download mode after an mtkclient session | Switch the robot off |
 | *Allow accessory to connect?* on the Mac | Apple silicon accessory security | **Allow**, then switch the robot off and on again |
 | `prepare`: *MISSING: libusb / Python* | Homebrew packages | Ask the person, then `brew install libusb python` |
 | Robot shows a battery picture instead of booting | Switched on with the cable plugged in | Off, unplug, on, plug in after start-up |
 | `adb` shows nothing in TWRP | Cable plugged before TWRP was up | Unplug/replug; `status` |
+| Battery screen between `root` and `flash-root` (TWRP gone) | The robot restarted with the cable in | Off, unplug, on: `boot` still holds TWRP, which comes back; plug in, run the next step |
 | `root` fails during the Magisk patch | Not the original boot, or a corrupt backup | Nothing was flashed. Check `~/Toque/backup`, redo `backup` |
 | `flash-root`: *holds something unexpected* | A partition holds neither what was backed up nor TWRP / the Magisk boot | Nothing was written. Do not continue; check `status` and the backups |
 | `flash-root`: *write failed* or *read-back differs* | Write error in TWRP | Do **not** switch the robot off: TWRP is still running. Run `flash-root` again |
