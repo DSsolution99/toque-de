@@ -6,41 +6,34 @@
 > whose install tools run on a **Mac**: shell scripts instead of PowerShell, and
 > [mtkclient](https://github.com/bkerler/mtkclient) instead of SP Flash Tool and its Windows driver.
 > The Toque app is unchanged and still updates from the original repository's releases. The macOS
-> download-mode steps have been tested against a simulated robot only; see [AGENTS.md](AGENTS.md).
+> install was done end to end on a real robot in November 2026; see [AGENTS.md](AGENTS.md).
 
 **Toque** is a fast, modern replacement interface for the Lidl **Monsieur Cuisine Connect**
 kitchen robot (SKMC 1200). It runs on the robot's own tablet instead of the stock app and still
 uses **the official Lidl recipes**.
 
 > Independent project, not affiliated with Lidl, SilverCrest or Hoyer. Motor control is based on
-> a public analysis of the serial protocol; it has been running daily on one robot (SKMC 1200,
-> Android 6) since October 2026, but has only been tried on that one. Use at your own risk and
+> a public analysis of the serial protocol; it has been running daily on a robot (SKMC 1200,
+> Android 6) since October 2026 and on a second one since November 2026, but has not been tried on
+> others. Use at your own risk and
 > follow the first-run procedure.
 >
 > The interface is available in **English** and **French** (*Settings › Langue · Language*), and
 > other languages can be added with a single file (see below).
 
-## Install with an AI agent
+## Install
 
-The easiest way: let an AI agent that can operate your Mac (Claude, ChatGPT, Copilot…) do
-the install. Give it this message:
+**Start here: [docs/INSTALLATION.md](docs/INSTALLATION.md)**, a step-by-step guide that starts from
+zero, for a Mac. On Windows, follow the
+[original repository's guide](https://github.com/Wuki60/MrCuisineVibeConnect/blob/main/docs/INSTALLATION.md).
 
-> Install Toque on my Monsieur Cuisine Connect from this Mac by following AGENTS.md in
-> [this repository's folder or URL]
-
-[AGENTS.md](AGENTS.md) describes the whole procedure to the agent, and
-[`tools/setup/toque-setup.sh`](tools/setup/toque-setup.sh) does the work step by step (verified
-downloads, backup, root, install, ADB over Wi-Fi). The agent only asks you for what it
-cannot do itself:
-
-- have a **USB-A male ↔ USB-A male** cable (plus a USB-C → USB-A adapter if the Mac only has USB-C
-  ports) and a small Torx screwdriver;
-- unscrew the cover under the robot, plug the cable into the **"Android USB"** port, switch the
-  robot off and on when told;
-- allow Homebrew packages (Python, libusb) and click **Allow** if macOS asks about a new accessory;
-- tap **Grant** once on the robot's screen.
-
-Allow 1 to 2 hours. Without an agent: [docs/INSTALLATION.md](docs/INSTALLATION.md).
+In short: you need a Mac, a **USB-A male ↔ USB-A male** cable, a small Torx screwdriver and 1 to 2
+hours. You prepare the Mac (Homebrew, then a copy of this repository), then either let
+[Claude Code](https://code.claude.com/docs/en/quickstart) do the install by following
+[AGENTS.md](AGENTS.md), or run [`tools/setup/toque-setup.sh`](tools/setup/toque-setup.sh) yourself,
+one step at a time. It backs up the robot first, roots it with Magisk, installs Toque and sets up
+ADB over Wi-Fi. You only handle the cover, the cable, the power switch and a tap on the robot's
+screen.
 
 ## Features
 
@@ -162,9 +155,9 @@ or the credentials already stored for git; `--dry-run` only shows what it would 
 
 ## Install on the robot
 
-With an AI agent: **[AGENTS.md](AGENTS.md)** (see above). By hand:
-**[docs/INSTALLATION.md](docs/INSTALLATION.md)**: root, install, first run with an empty
-bowl, recipe sync, going back to the stock app. From Windows, use the original repository's guide.
+**[docs/INSTALLATION.md](docs/INSTALLATION.md)** (see [Install](#install)): preparing the Mac, root,
+install with Claude Code or by hand, first run with an empty bowl, recipe sync, going back to the
+stock app. From Windows, use the original repository's guide.
 
 ## Credits
 

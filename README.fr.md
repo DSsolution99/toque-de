@@ -6,39 +6,30 @@
 > dont les outils d'installation tournent sur un **Mac** : des scripts shell au lieu de PowerShell,
 > et [mtkclient](https://github.com/bkerler/mtkclient) au lieu de SP Flash Tool et de son pilote
 > Windows. L'appli Toque est inchangée et se met toujours à jour depuis les versions du dépôt
-> d'origine. Les étapes en mode téléchargement depuis macOS n'ont été testées que sur un robot
-> simulé ; voir [AGENTS.md](AGENTS.md).
+> d'origine. L'installation depuis macOS a été faite de bout en bout sur un vrai robot en
+> novembre 2026 ; voir [AGENTS.md](AGENTS.md).
 
 **Toque**, une interface moderne et rapide pour le robot **Monsieur Cuisine Connect** (SKMC 1200),
 qui remplace l'appli d'origine sur la tablette du robot tout en gardant **les recettes Lidl**.
 
 > Projet indépendant, non affilié à Lidl, SilverCrest ni Hoyer. Le pilotage du moteur repose
 > sur une analyse publique du protocole ; il tourne au quotidien sur un robot (SKMC 1200, Android 6)
-> depuis octobre 2026, mais n'a été essayé que sur celui-là. À utiliser à vos risques, en suivant la
-> procédure de premier essai.
+> depuis octobre 2026 et sur un second depuis novembre 2026, mais n'a pas été essayé sur d'autres.
+> À utiliser à vos risques, en suivant la procédure de premier essai.
 
-## Installer avec un agent IA
+## Installer
 
-Le plus simple : confiez l'installation à un agent IA qui peut piloter votre Mac (Claude,
-ChatGPT, Copilot…). Donnez-lui ce message :
+**Commencez ici : [docs/INSTALLATION.fr.md](docs/INSTALLATION.fr.md)**, un guide pas à pas qui part
+de zéro, pour Mac. Sous Windows, suivez le
+[guide du dépôt d'origine](https://github.com/Wuki60/MrCuisineVibeConnect/blob/main/docs/INSTALLATION.fr.md).
 
-> Installe Toque sur mon Monsieur Cuisine Connect depuis ce Mac en suivant le fichier AGENTS.md de
-> [dossier ou URL de ce dépôt]
-
-Le fichier [AGENTS.md](AGENTS.md) lui décrit toute la procédure, et le script
-[`tools/setup/toque-setup.sh`](tools/setup/toque-setup.sh) fait le travail étape par étape
-(téléchargements vérifiés, sauvegarde, root, installation, ADB par Wi-Fi). L'agent ne vous
-demande que ce qu'il ne peut pas faire lui-même :
-
-- avoir un câble **USB-A mâle ↔ USB-A mâle** (plus un adaptateur USB-C → USB-A si le Mac n'a que
-  des ports USB-C) et un petit tournevis Torx ;
-- dévisser la trappe sous le robot, brancher le câble sur le port **« Android USB »**, éteindre et
-  rallumer le robot quand il le dit ;
-- accepter les paquets Homebrew (Python, libusb) et cliquer sur **Autoriser** si macOS demande
-  d'autoriser un nouvel accessoire ;
-- appuyer une fois sur **Autoriser** sur l'écran du robot.
-
-Comptez 1 à 2 heures. Sans agent : [docs/INSTALLATION.fr.md](docs/INSTALLATION.fr.md).
+En bref : il faut un Mac, un câble **USB-A mâle ↔ USB-A mâle**, un petit tournevis Torx et 1 à 2
+heures. Vous préparez le Mac (Homebrew, puis une copie de ce dépôt), puis soit vous laissez
+[Claude Code](https://code.claude.com/docs/en/quickstart) faire l'installation en suivant
+[AGENTS.md](AGENTS.md), soit vous lancez vous-même [`tools/setup/toque-setup.sh`](tools/setup/toque-setup.sh),
+une étape à la fois. Il sauvegarde d'abord le robot, le roote avec Magisk, installe Toque et active
+ADB par Wi-Fi. Vous ne vous occupez que de la trappe, du câble, de l'interrupteur et d'un appui sur
+l'écran du robot.
 
 ## Ce que fait Toque
 
@@ -164,9 +155,9 @@ ou les identifiants déjà enregistrés pour git ; `--dry-run` montre seulement 
 
 ## Installer sur le robot
 
-Avec un agent IA : **[AGENTS.md](AGENTS.md)** (voir plus haut). À la main :
-**[docs/INSTALLATION.fr.md](docs/INSTALLATION.fr.md)** : root, installation, premier essai à vide,
-synchronisation des recettes, retour à l'appli d'origine. Depuis Windows, suivre le guide du dépôt
+**[docs/INSTALLATION.fr.md](docs/INSTALLATION.fr.md)** (voir [Installer](#installer)) : préparation
+du Mac, root, installation avec Claude Code ou à la main, premier essai à vide, synchronisation des
+recettes, retour à l'appli d'origine. Depuis Windows, suivre le guide du dépôt
 d'origine.
 
 ## Crédits

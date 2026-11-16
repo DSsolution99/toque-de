@@ -71,6 +71,11 @@ person this before starting.
 
 No driver to install, no SP Flash Tool, no change to macOS security.
 
+The person usually comes from part 2 of [docs/INSTALLATION.md](docs/INSTALLATION.md) (Homebrew,
+`brew install python libusb`, this repository cloned into `~/MrCuisineVibeConnect`) and keeps that
+guide open: its part 3b shows them what each step looks like. If Homebrew is missing, the person
+installs it themselves (it asks for their Mac password): give them the command from that part.
+
 ## The tool
 
 Everything is driven by one script, from the repository folder:
