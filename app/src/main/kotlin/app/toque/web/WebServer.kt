@@ -7,6 +7,7 @@ import app.toque.core.json.Json
 import app.toque.core.json.int
 import app.toque.core.json.obj
 import app.toque.core.json.str
+import app.toque.core.net.LocalNetwork
 import app.toque.core.recipes.RecipeFilter
 import app.toque.core.recipes.RecipeSort
 import app.toque.core.recipes.WebViews
@@ -249,9 +250,8 @@ class WebServer(private val app: ToqueApp) {
     companion object {
         const val PORT = 8080
 
-        /** Adresse du réseau de la maison (ou de l'appareil lui-même). */
-        fun isLocal(a: InetAddress?): Boolean =
-            a != null && (a.isLoopbackAddress || a.isSiteLocalAddress || a.isLinkLocalAddress)
+        /** Adresse du réseau de la maison (voir [LocalNetwork]). */
+        fun isLocal(a: InetAddress?): Boolean = LocalNetwork.isLocal(a)
 
         /** Adresses IPv4 du robot dans le réseau local, pour les afficher dans les réglages. */
         fun localAddresses(): List<String> = try {
