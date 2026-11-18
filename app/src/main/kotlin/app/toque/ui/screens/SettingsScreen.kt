@@ -27,6 +27,7 @@ import app.toque.ui.MainActivity
 import app.toque.ui.Screen
 import app.toque.ui.Ui
 import app.toque.update.Updater
+import app.toque.web.WebServer
 
 class SettingsScreen(a: MainActivity) : Screen(a) {
     override val title = tr("Réglages")
@@ -134,6 +135,28 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         b2.addView(Ui.button(c, tr("Ouvrir l'appli d'origine"), Ui.Style.GHOST, Icon.Kind.LINK, height = 52) { a.openVendorApp() })
         lidl.addView(b2, Ui.lp(t = 6))
         lidl.addView(toggle(tr("Synchro automatique chaque nuit"), a.prefs.autoSync) { a.prefs.autoSync = it }, Ui.lp(t = 10))
+
+        // ---- Interface web (téléphone)
+        val web = section(right, tr("Téléphone (interface web)"), Icon.Kind.LINK)
+        web.addView(Ui.text(c, tr("Depuis un téléphone sur le même Wi-Fi : chercher les recettes, les ouvrir sur le robot, gérer la liste de courses. Rien ne démarre le moteur à distance."),
+            16f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) })
+        val webText = Ui.text(c, "", 18f, Ui.ACCENT, Ui.MEDIUM)
+        fun refreshWeb() {
+            val ips = WebServer.localAddresses()
+            webText.text = when {
+                !a.prefs.webAccess -> tr("Désactivée")
+                !a.app.web.running -> tr("Démarrage impossible (voir le journal)")
+                ips.isEmpty() -> tr("Pas de Wi-Fi")
+                else -> ips.joinToString("\n") { "http://$it:${WebServer.PORT}" }
+            }
+        }
+        web.addView(webText, Ui.lp(t = 10))
+        web.addView(toggle(tr("Activer l'interface web"), a.prefs.webAccess) {
+            a.prefs.webAccess = it
+            if (it) a.app.web.start() else a.app.web.stop()
+            refreshWeb()
+        }, Ui.lp(t = 10))
+        refreshWeb()
 
         // ---- Mises à jour
         val updates = section(left, tr("Mises à jour"), Icon.Kind.INFO)

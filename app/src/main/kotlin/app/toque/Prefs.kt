@@ -103,6 +103,13 @@ class Prefs(context: Context) {
             p.edit().putString("lastZone", v).commit()
         }
 
+    /** Interface web pour le téléphone dans le réseau de la maison (port 8080). */
+    var webAccess: Boolean
+        get() = p.getBoolean("webAccess", true)
+        set(v) {
+            p.edit().putBoolean("webAccess", v).commit()
+        }
+
     var autoSync: Boolean
         get() = p.getBoolean("autoSync", true)
         set(v) {

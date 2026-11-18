@@ -12,6 +12,7 @@ import app.toque.machine.MachineClient
 import app.toque.recipes.RecipeRepo
 import app.toque.recipes.ShoppingRepo
 import app.toque.ui.MainActivity
+import app.toque.web.WebServer
 import java.util.Locale
 
 class ToqueApp : Application() {
@@ -22,6 +23,7 @@ class ToqueApp : Application() {
     val machine: MachineClient by lazy { MachineClient(this) }
     val recipes: RecipeRepo by lazy { RecipeRepo(this) }
     val shopping: ShoppingRepo by lazy { ShoppingRepo(this) }
+    val web: WebServer by lazy { WebServer(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +52,7 @@ class ToqueApp : Application() {
         }
         log.write("interface", "démarrage")
         TimeSync.start(this, prefs, log)
+        if (prefs.webAccess) web.start()
     }
 
     private fun isMainProcess(): Boolean {

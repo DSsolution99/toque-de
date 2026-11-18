@@ -30,6 +30,7 @@ import app.toque.core.machine.Verdict
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
 import app.toque.ui.screens.HomeScreen
+import app.toque.ui.screens.RecipeScreen
 import app.toque.ui.screens.SettingsScreen
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -93,6 +94,29 @@ class MainActivity : Activity() {
             reopenSettings = false
             push(SettingsScreen(this))
         }
+        openFromPhone(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        openFromPhone(intent)
+    }
+
+    /** Recette envoyée depuis le téléphone (interface web) : ouverte par-dessus l'accueil, jamais pendant un programme. */
+    private fun openFromPhone(intent: Intent?) {
+        val id = intent?.getStringExtra(EXTRA_OPEN_RECIPE) ?: return
+        intent.removeExtra(EXTRA_OPEN_RECIPE)
+        val servings = intent.getIntExtra(EXTRA_SERVINGS, 0)
+        val recipe = app.recipes.get(id) ?: return
+        if (snapshot.busy) {
+            toast(tr("Recette « %s » reçue du téléphone : terminez d'abord le programme en cours", recipe.title), Ui.WARN)
+            return
+        }
+        closeOverlay()
+        home()
+        push(RecipeScreen(this, recipe, servings))
+        toast(tr("Ouverte depuis le téléphone"))
+        chime()
     }
 
     /** Applique la langue choisie dans les réglages : l'interface est reconstruite, on revient aux réglages. */
@@ -440,6 +464,8 @@ class MainActivity : Activity() {
 
     companion object {
         private var reopenSettings = false
+        const val EXTRA_OPEN_RECIPE = "app.toque.OPEN_RECIPE"
+        const val EXTRA_SERVINGS = "app.toque.SERVINGS"
 
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26

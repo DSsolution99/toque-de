@@ -12,6 +12,7 @@ import app.toque.core.recipes.RecipeFilter
 import app.toque.core.recipes.RecipeSort
 import app.toque.core.recipes.SearchIndex
 import app.toque.core.recipes.ShoppingList
+import app.toque.core.recipes.WebViews
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -163,5 +164,33 @@ class FeaturesTest {
         assertEquals(1, list.clearChecked())
         assertEquals(1, list.size)
         assertEquals(0, ShoppingList.fromJson("kaputt").size)
+    }
+
+    // ------------------------------------------------------------------ Handy
+
+    @Test fun phoneGetsScaledRecipeAndLocalImages() {
+        val r = Recipe(id = "web-1", title = "Suppe", servings = 4, servingUnit = "Portionen",
+            image = "https://cdn.example.test/uploads/2021/suppe.jpg?w=1",
+            ingredients = listOf(IngredientGroup("", listOf(Ingredient("200", "g", "Linsen"), Ingredient("", "", "Salz")))))
+        val d = WebViews.detail(r, 8, favorite = true) { true }
+        assertEquals(8, d["wanted"]); assertEquals(true, d["scaled"]); assertEquals(true, d["favorite"])
+        @Suppress("UNCHECKED_CAST")
+        val items = (d["ingredients"] as List<Map<String, Any?>>).single()["items"] as List<String>
+        assertEquals(listOf("400 g Linsen", "Salz"), items)
+        assertEquals("/img/suppe.jpg", d["image"])
+        // Ohne Foto im Speicher kein Bild-Link; ohne Portionsangabe keine Umrechnung.
+        assertEquals("", WebViews.detail(r, 0, false) { false }["image"])
+        assertEquals(false, WebViews.detail(r.copy(servings = 0), 8, false) { true }["scaled"])
+        assertEquals("/img/a%20b.jpg", WebViews.imagePath("https://x.test/a b.jpg") { true })
+    }
+
+    @Test fun phoneShoppingList() {
+        val list = ShoppingList()
+        list.add(withIngredients("Suppe", Ingredient("1", "", "Zwiebel", ref = 7, aisle = "Gemüse")))
+        val v = WebViews.shopping(list, 3)
+        assertEquals(3L, v["version"]); assertEquals(1, v["open"])
+        @Suppress("UNCHECKED_CAST")
+        val group = (v["groups"] as List<Map<String, Any?>>).single()
+        assertEquals("Gemüse", group["aisle"])
     }
 }
