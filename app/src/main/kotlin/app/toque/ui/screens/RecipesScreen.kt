@@ -143,11 +143,18 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         chips.addView(Ui.toggleChip(c, "⇅ " + sortLabel(filter.sort), filter.sort != RecipeSort.RELEVANCE) {
             filter = filter.copy(sort = next); buildChips(); search()
         }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 16))
-        val base = RecipeFilter(sort = filter.sort)
-        chip(tr("Toutes"), filter == base, base)
+        val reset = RecipeFilter(sort = filter.sort)
+        chip(tr("Toutes"), filter == reset, reset)
+        // Le palier de calories reste quand on choisit une catégorie (« Vegan » + « 400 kcal max »).
+        val base = reset.copy(maxKcal = filter.maxKcal)
         chip(tr("Favoris"), filter.favoritesOnly, base.copy(favoritesOnly = true))
         chip(tr("30 min max"), filter.maxMinutes == 30, base.copy(maxMinutes = 30))
-        chip(tr("%d kcal max", KCAL_LIMIT), filter.maxKcal == KCAL_LIMIT, base.copy(maxKcal = KCAL_LIMIT))
+        // Calories : une touche passe au palier suivant (200 → 300 → … → 800 → sans limite).
+        val levels = RecipeFilter.KCAL_LEVELS
+        val nextKcal = levels.firstOrNull { it > filter.maxKcal } ?: 0
+        chips.addView(Ui.toggleChip(c, if (filter.maxKcal > 0) tr("%d kcal max", filter.maxKcal) else tr("Calories"), filter.maxKcal > 0) {
+            filter = filter.copy(maxKcal = nextKcal); buildChips(); search()
+        }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
         for (cat in a.app.recipes.index.categories.take(30)) chip(cat, filter.category == cat, base.copy(category = cat))
     }
 
@@ -156,6 +163,7 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         RecipeSort.POPULAR -> tr("Populaires")
         RecipeSort.NEWEST -> tr("Nouveautés")
         RecipeSort.RATING -> tr("Mieux notées")
+        RecipeSort.LIGHT -> tr("Moins caloriques")
     }
 
     private fun search() {
@@ -210,8 +218,6 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
     private companion object {
         /** Un seul fil de recherche partagé par tous les écrans Recettes. */
         val searchExec = Executors.newSingleThreadExecutor()
-        /** Limite du filtre calories (par portion). */
-        const val KCAL_LIMIT = 500
     }
 
     private inner class Adapter : BaseAdapter() {

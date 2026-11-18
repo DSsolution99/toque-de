@@ -70,7 +70,7 @@ object TextNorm {
 }
 
 /** Ordre de la liste : pertinence (ou alphabétique sans recherche), popularité, nouveauté, note. */
-enum class RecipeSort { RELEVANCE, POPULAR, NEWEST, RATING }
+enum class RecipeSort { RELEVANCE, POPULAR, NEWEST, RATING, LIGHT }
 
 /** Filtres de la liste de recettes. */
 data class RecipeFilter(
@@ -79,10 +79,24 @@ data class RecipeFilter(
     val favoritesOnly: Boolean = false,
     val source: RecipeSource? = null,
     val maxMinutes: Int = 0,
-    /** Calories maximales par portion (0 : pas de limite ; recettes sans valeur exclues sinon). */
+    /**
+     * Calories maximales par portion (0 : pas de limite). Seules comptent les recettes données en
+     * portions : pour « 80 Stück », la valeur du site est celle d'un biscuit, pas d'un repas.
+     */
     val maxKcal: Int = 0,
     val sort: RecipeSort = RecipeSort.RELEVANCE,
-)
+) {
+    companion object {
+        /** Paliers proposés pour [maxKcal]. */
+        val KCAL_LEVELS = listOf(200, 300, 400, 500, 600, 800)
+
+        /** Unité de portions au sens d'un repas (« Portionen », « Personen »…, ou non précisée). */
+        fun isPortionUnit(unit: String): Boolean {
+            val u = TextNorm.normalize(unit)
+            return u.isEmpty() || u.startsWith("portion") || u.startsWith("pers") || u.startsWith("serving") || u.startsWith("couvert")
+        }
+    }
+}
 
 /**
  * Index de recherche en mémoire : tolérant aux accents, aux pluriels et aux fautes de frappe,
@@ -110,6 +124,8 @@ class SearchIndex(recipes: List<Recipe>) {
         val popularity: Double = 0.0,
         /** Date de publication « AAAA-MM-JJ », vide si inconnue. */
         val published: String = "",
+        /** Calories d'une portion-repas (0 : inconnues, ou recette donnée à la pièce, au verre…). */
+        val portionKcal: Int = 0,
     )
 
     data class Hit(val entry: Entry, val score: Double, val matched: Int)
@@ -131,7 +147,8 @@ class SearchIndex(recipes: List<Recipe>) {
         for ((index, r) in recipes.withIndex()) {
             list += Entry(r.id, r.title, r.category, r.tags, r.favorite, r.source, r.totalMinutes, r.image,
                 r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount,
-                r.allCategories, r.nutrition?.kcal ?: 0, r.popularity, r.published)
+                r.allCategories, r.nutrition?.kcal ?: 0, r.popularity, r.published,
+                if (RecipeFilter.isPortionUnit(r.servingUnit)) r.nutrition?.kcal ?: 0 else 0)
             fun add(text: String, w: Int) {
                 for (t in TextNorm.tokens(text)) {
                     val p = postings.getOrPut(t) { HashMap(4) }
@@ -190,7 +207,7 @@ class SearchIndex(recipes: List<Recipe>) {
 
     private fun accepts(e: Entry, f: RecipeFilter): Boolean {
         if (f.category.isNotEmpty() && e.category != f.category && f.category !in e.categories) return false
-        if (f.maxKcal > 0 && (e.kcal <= 0 || e.kcal > f.maxKcal)) return false
+        if (f.maxKcal > 0 && (e.portionKcal <= 0 || e.portionKcal > f.maxKcal)) return false
         if (f.favoritesOnly && !e.favorite) return false
         if (f.source != null && e.source != f.source) return false
         if (f.maxMinutes > 0 && (e.totalMinutes <= 0 || e.totalMinutes > f.maxMinutes)) return false
@@ -249,6 +266,7 @@ class SearchIndex(recipes: List<Recipe>) {
         RecipeSort.NEWEST -> compareByDescending<Entry> { it.published }.thenBy { it.normTitle }
         RecipeSort.RATING -> compareByDescending<Entry> { if (it.ratingCount >= 5) it.rating else 0.0 }
             .thenByDescending { it.ratingCount }.thenBy { it.normTitle }
+        RecipeSort.LIGHT -> compareBy<Entry> { if (it.portionKcal > 0) it.portionKcal else Int.MAX_VALUE }.thenBy { it.normTitle }
         RecipeSort.RELEVANCE -> compareBy<Entry> { it.normTitle }
     }
 

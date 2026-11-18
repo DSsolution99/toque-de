@@ -166,6 +166,7 @@ class WebServer(private val app: ToqueApp) {
             req.path == "/api/texts" -> ok(linkedMapOf("language" to I18n.code, "texts" to WebTexts.all()))
             req.path == "/api/status" -> ok(WebStatus.of(app.machine.snapshot))
             req.path == "/api/categories" -> ok(app.recipes.index.categories)
+            req.path == "/api/filters" -> ok(linkedMapOf("kcal" to RecipeFilter.KCAL_LEVELS, "sorts" to RecipeSort.values().map { it.name }))
             req.path == "/api/recipes" -> recipes(req.query)
             req.path == "/api/recipe" -> recipe(req.query["id"].orEmpty(), req.query["servings"]?.toIntOrNull() ?: 0)
             req.path == "/api/shopping" && !write -> shopping()

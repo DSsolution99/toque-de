@@ -108,6 +108,19 @@ class FeaturesTest {
         assertEquals(setOf("a", "c"), index.search("", RecipeFilter(maxKcal = 500)).map { it.entry.id }.toSet())
     }
 
+    @Test fun kcalCountsOnlyRealPortions() {
+        val cookies = recipe("e", "Nussplätzchen", "Backen", kcal = 49).copy(servings = 80, servingUnit = "Stück")
+        val soup = recipe("f", "Kürbissuppe", "Suppen & Eintöpfe", kcal = 210).copy(servings = 4, servingUnit = "Portionen")
+        val idx = SearchIndex(listOf(cookies, soup))
+        // 49 kcal pro Plätzchen ist keine Mahlzeit: weder Filter noch Sortierung zählen es.
+        assertEquals(listOf("f"), idx.search("", RecipeFilter(maxKcal = 300)).map { it.entry.id })
+        assertEquals(listOf("f", "e"), idx.search("", RecipeFilter(sort = RecipeSort.LIGHT)).map { it.entry.id })
+        assertTrue(RecipeFilter.isPortionUnit("Portionen"))
+        assertTrue(RecipeFilter.isPortionUnit(""))
+        assertFalse(RecipeFilter.isPortionUnit("Gläser"))
+        assertEquals(listOf(200, 300, 400, 500, 600, 800), RecipeFilter.KCAL_LEVELS)
+    }
+
     @Test fun sortOrders() {
         assertEquals(listOf("b", "c", "a", "d"), index.search("", RecipeFilter(sort = RecipeSort.POPULAR)).map { it.entry.id })
         assertEquals(listOf("a", "c", "b", "d"), index.search("", RecipeFilter(sort = RecipeSort.NEWEST)).map { it.entry.id })

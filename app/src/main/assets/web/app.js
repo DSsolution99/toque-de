@@ -45,6 +45,7 @@ const state = {
   offset: 0,
   total: 0,
   categories: [],
+  kcalLevels: [200, 300, 400, 500, 600, 800],
   detail: null,
   shoppingVersion: -1,
 };
@@ -53,24 +54,26 @@ const state = {
 
 function renderChips() {
   const c = $("chips");
-  const sorts = [["RELEVANCE", "sortRelevance"], ["POPULAR", "sortPopular"], ["NEWEST", "sortNewest"], ["RATING", "sortRating"]];
+  const sorts = [["RELEVANCE", "sortRelevance"], ["POPULAR", "sortPopular"], ["NEWEST", "sortNewest"], ["RATING", "sortRating"], ["LIGHT", "sortLight"]];
   c.innerHTML =
     `<select class="chip${state.sort !== "RELEVANCE" ? " on" : ""}" id="sort">` +
     sorts.map(([v, k]) => `<option value="${v}"${state.sort === v ? " selected" : ""}>⇅ ${esc(T(k))}</option>`).join("") +
     `</select>` +
     `<button class="chip${state.favorites ? " on" : ""}" data-f="favorites">★ ${esc(T("favorites"))}</button>` +
     `<button class="chip${state.minutes ? " on" : ""}" data-f="minutes">${esc(T("minutes30"))}</button>` +
-    `<button class="chip${state.kcal ? " on" : ""}" data-f="kcal">${esc(T("kcal500", 500))}</button>` +
+    `<select class="chip${state.kcal ? " on" : ""}" id="kcal" title="${esc(T("kcalHint"))}"><option value="0">${esc(T("calories"))}</option>` +
+    state.kcalLevels.map((k) => `<option value="${k}"${state.kcal === k ? " selected" : ""}>${esc(T("kcal500", k))}</option>`).join("") +
+    `</select>` +
     `<select class="chip${state.category ? " on" : ""}" id="cat"><option value="">${esc(T("category"))}: ${esc(T("all"))}</option>` +
     state.categories.map((k) => `<option${state.category === k ? " selected" : ""}>${esc(k)}</option>`).join("") +
     `</select>`;
   $("sort").onchange = (e) => { state.sort = e.target.value; reload(); };
   $("cat").onchange = (e) => { state.category = e.target.value; reload(); };
+  $("kcal").onchange = (e) => { state.kcal = Number(e.target.value); reload(); };
   c.querySelectorAll("button[data-f]").forEach((b) => (b.onclick = () => {
     const f = b.dataset.f;
     if (f === "favorites") state.favorites = !state.favorites;
     if (f === "minutes") state.minutes = state.minutes ? 0 : 30;
-    if (f === "kcal") state.kcal = state.kcal ? 0 : 500;
     reload();
   }));
 }
@@ -107,7 +110,8 @@ async function reload(append = false) {
     const html = data.items.map(card).join("");
     const grid = $("grid");
     grid.innerHTML = append ? grid.innerHTML + html : html;
-    $("count").textContent = data.total ? T("count", data.total) : "";
+    $("count").textContent = (data.total === 1 ? T("countOne") : data.total ? T("count", data.total) : "") +
+      (state.kcal || state.sort === "LIGHT" ? " · " + T("kcalHint") : "");
     if (!data.total) grid.innerHTML = `<p class="empty">${esc(T("none"))}</p>`;
     state.offset = data.offset + data.items.length;
     $("more").hidden = state.offset >= data.total;
@@ -298,6 +302,7 @@ async function start() {
   $("more").textContent = T("more");
   $("back").setAttribute("aria-label", T("back"));
   try { state.categories = await get("/api/categories"); } catch (e) {}
+  try { state.kcalLevels = (await get("/api/filters")).kcal; } catch (e) {}
   let timer = 0;
   $("q").oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { state.q = e.target.value; reload(); }, 250); };
   $("more").onclick = () => reload(true);

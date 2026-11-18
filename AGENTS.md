@@ -5,10 +5,14 @@ repository with a request such as *"Install Toque on my Monsieur Cuisine Connect
 complete procedure, written so that the agent does everything it can by itself and asks the person
 only for what needs hands, eyes or a macOS prompt.
 
-This is the **macOS** version of [Wuki60/MrCuisineVibeConnect](https://github.com/Wuki60/MrCuisineVibeConnect):
+This is **toque-de**, a version of [Wuki60/MrCuisineVibeConnect](https://github.com/Wuki60/MrCuisineVibeConnect)
+with macOS install tools (from [flexbox/MrCuisineVibeConnect](https://github.com/flexbox/MrCuisineVibeConnect)),
+a German interface, German recipes and a phone web app. On macOS
 the Windows tools (SP Flash Tool, MediaTek driver, PowerShell) are replaced by
-[mtkclient](https://github.com/bkerler/mtkclient) and shell scripts. The Toque app itself is
-unchanged. Humans: the same procedure by hand is in [docs/INSTALLATION.md](docs/INSTALLATION.md).
+[mtkclient](https://github.com/bkerler/mtkclient) and shell scripts. The Toque APK comes from this
+repository's releases (same package `app.toque`, same public signing key as the original). Humans:
+the same procedure by hand is in [docs/INSTALLATION.md](docs/INSTALLATION.md), in German in
+[docs/INSTALLATION.de.md](docs/INSTALLATION.de.md).
 
 ## What you are doing
 
@@ -111,12 +115,12 @@ step, have the person switch it off. `ls /dev/cu.usbmodem*` lists nothing once i
 | # | Step | Who | What happens |
 |---|------|-----|--------------|
 | 0 | clone | agent | Get this repository on the Mac (git clone or a ZIP). |
-| 1 | `prepare` | agent | Downloads adb, Magisk v31.0, TWRP and the scatter file, the latest Toque APK, mtkclient v2.1.4.1 and its Python packages (into `~/Toque/mtkclient`); checks every SHA-256 and the mtkclient commit, applies the macOS serial fixes. Says which Homebrew packages are missing, if any. |
+| 1 | `prepare` | agent | Downloads adb, Magisk v31.0, TWRP and the scatter file, mtkclient v2.1.4.1 and its Python packages (into `~/Toque/mtkclient`); checks every SHA-256 and the mtkclient commit, applies the macOS serial fixes. Says which Homebrew packages are missing, if any. |
 | 2 | `backup` | person, then agent | Cover off, cable in the **right-hand "Android USB" port**, robot off; mtkclient reads `boot` and `recovery` when the person switches the robot on. Verifies two 16 MiB Android images before keeping them. |
 | 3 | `flash-twrp` | agent + person | Writes TWRP into `boot` in download mode and reads it back. The person power-cycles: off, **unplug**, on, plug back → TWRP. |
 | 4 | `root` | agent | In TWRP: patches the *original* boot with Magisk, enables ADB in Android, authorizes the Mac's ADB key, pulls `boot-magisk.img`. |
 | 5 | `flash-root` | agent | Still in TWRP: writes TWRP into `recovery` and `boot-magisk.img` into `boot`. Checks first that both partitions hold what they should (else writes nothing), reads each one back. Power cycle as above → stock app. |
-| 6 | `android` | agent + person | Checks Magisk, installs its app; the person taps **Grant** on the robot once. Checks the boot partition. |
+| 6 | `android` | agent + person | Checks Magisk, installs its app; the person taps **Grant** on the robot once. Checks the boot partition. Downloads the latest Toque APK from this repository's releases. |
 | 7 | `install` | agent | Installs Toque, allows it in Magisk, starts it. |
 | 8 | first run | person | Empty bowl: Settings › Machine › Real machine › Apply, badge **Ready**, manual cooking 10 s speed 2. |
 | 9 | `wifi` | agent | ADB over Wi-Fi (port 5555), so the cable can go and the cover go back on. |
@@ -167,7 +171,7 @@ Nothing is ever written when mtkclient cannot connect.
 | Magisk v31.0 | `https://github.com/topjohnwu/Magisk/releases/download/v31.0/Magisk-v31.0.apk` | SHA-256 `2c8a488b9a5293e578e95ae4f07e3c57aba4feec4a52ca4dd852a2692d6dd4e8` |
 | TWRP `hacks/recovery.img` | [EliasKotlyar/Monsieur-Cuisine-Connect-Hack](https://github.com/EliasKotlyar/Monsieur-Cuisine-Connect-Hack) | SHA-256 `fc9ac999fc3b0a6c0cb563f39359084a6fcc211aeb42e7b754990afa4b543d3e` |
 | Scatter `l706_dfbh_v_695scatter.txt` | same repository | SHA-256 `13b8260dba9e4efba874c09e35803af43cc69556ba0f1937226240b0ab318364`; `boot` at `0x1d20000` and `recovery` at `0x2d20000` (16 MiB each) are checked in it |
-| Toque `Toque-X.Y.Z.apk` | [latest release](https://github.com/Wuki60/MrCuisineVibeConnect/releases/latest) of the original repository | (signed with the project key) |
+| Toque `Toque-X.Y.Z.apk` (downloaded by `android`) | [latest release](https://github.com/DSsolution99/toque-de/releases/latest) of this repository | (signed with the project key) |
 | mtkclient v2.1.4.1 | `git clone` of [bkerler/mtkclient](https://github.com/bkerler/mtkclient) | commit `5a863eece86fcaa97cb8325cf747e0aae3c307e4`, then [mtkclient-macos-serial.patch](tools/setup/mtkclient-macos-serial.patch) applied; download-mode steps refuse to run unless exactly that is in place |
 | mtkclient's Python packages | PyPI, [tools/setup/mtkclient-requirements.txt](tools/setup/mtkclient-requirements.txt) | pinned versions and SHA-256 (`pip --require-hashes`) |
 
@@ -207,7 +211,9 @@ and without macFUSE the FUSE package stops mtkclient from starting
 
 ## After the install
 
-- Updates: Toque › Settings › Updates installs new releases from the original repository.
+- Updates: Toque › Settings › Updates installs new releases of this repository.
+- Phone: Toque › Settings › Phone (web interface) shows the address to open on a phone on the same
+  Wi-Fi (`http://<robot IP>:8080`). Tell the person; it can be turned off there.
 - Recipes: Settings › Lidl recipes › Sync (monsieur-cuisine.com, no account). Nightly re-sync.
 - Clock: set automatically (time zone from the Internet connection); Settings › Date and time.
 - To work on the robot later over Wi-Fi: `adb connect <robot IP>:5555`.

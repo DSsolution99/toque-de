@@ -82,7 +82,7 @@ finish (the cursor comes back).
    ```
 3. **Download this repository** into a `MrCuisineVibeConnect` folder in your home folder:
    ```
-   git clone https://github.com/flexbox/MrCuisineVibeConnect.git ~/MrCuisineVibeConnect
+   git clone https://github.com/DSsolution99/toque-de.git ~/MrCuisineVibeConnect
    ```
 4. **Go into that folder**:
    ```
@@ -150,7 +150,8 @@ The robot is not involved.
 bash tools/setup/toque-setup.sh prepare
 ```
 
-It downloads into the `~/Toque` folder: adb, Magisk, TWRP, the latest Toque and mtkclient, and
+It downloads into the `~/Toque` folder: adb, Magisk, TWRP and mtkclient (the latest Toque comes
+at step 6, `android`), and
 checks every file. If it prints `MISSING:`, install what it says, then run it again.
 
 ✅ At the end: `OK: prepare done. Next: backup`
@@ -291,7 +292,10 @@ Lidl's servers; come back with the **"Back to Toque"** button. If that import fa
 - The robot has no Home or Back button: when another app is open (the stock app, the Android
   settings), the **"Back to Toque"** button stays on top (you can move it).
 - Android settings: tap the clock at the top right 5 times quickly.
-- Updates: **Settings › Updates** installs new versions.
+- Updates: **Settings › Updates** installs new versions of toque-de.
+- Phone: **Settings › Phone (web interface)** shows the address to open on a phone on the same
+  Wi-Fi: search recipes, open them on the robot, shopping list. German interface and recipes:
+  **Settings › Langue · Language › Deutsch**, then sync the recipes again.
 - From the Mac, over Wi-Fi: `~/Toque/platform-tools/adb connect <robot IP address>:5555`, then
   `~/Toque/platform-tools/adb shell am start -n app.toque/.ui.MainActivity` opens Toque.
 
@@ -317,7 +321,7 @@ Lidl's servers; come back with the **"Back to Toque"** button. If that import fa
 
 Still stuck? Send `~/Toque/setup-log.txt` (and `~/Toque/mtk-<step>-out.txt` for `backup` or
 `flash-twrp`) to whoever helps you, or open an
-[issue](https://github.com/flexbox/MrCuisineVibeConnect/issues).
+[issue](https://github.com/DSsolution99/toque-de/issues).
 
 ### If the Mac never reaches the robot in download mode
 

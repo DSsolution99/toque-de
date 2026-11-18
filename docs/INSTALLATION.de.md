@@ -87,7 +87,7 @@ Dann wählen: **3a** (Claude tippt die Befehle für dich, empfohlen) oder **3b**
 
 Öffne in der Claude-App eine Sitzung im Ordner `toque-de` und schreibe:
 
-> Installiere Toque auf meinem Monsieur Cuisine Connect nach AGENTS.md und danach die deutsche Sprache nach docs/INSTALLATION.de.md.
+> Installiere Toque auf meinem Monsieur Cuisine Connect nach AGENTS.md. Sprich Deutsch mit mir.
 
 - Claude erklärt die Risiken und fragt nach einem **Ja**, bevor es anfängt.
 - Vor jedem Schritt, der auf das Gerät schreibt, sagt es, was passiert, und wartet auf dein **Ja**.
@@ -122,7 +122,8 @@ Das Gerät ist noch nicht beteiligt.
 bash tools/setup/toque-setup.sh prepare
 ```
 
-Lädt adb, Magisk, TWRP, die neueste Toque-Version und mtkclient nach `~/Toque` und prüft alles.
+Lädt adb, Magisk, TWRP und mtkclient nach `~/Toque` und prüft alles (die neueste Toque-Version
+kommt in Schritt 6, `android`).
 Steht da `MISSING:`, installiere das Genannte und führe den Schritt noch mal aus.
 
 ✅ Am Ende: `OK: prepare done. Next: backup`
@@ -278,7 +279,9 @@ wie vorgesehen auf höchstens Stufe 4, ohne Turbo.
 ### Rezepte finden, Portionen, Einkaufsliste
 
 - **Filter und Sortierung** in der Rezeptliste: die erste Taste wechselt die Reihenfolge
-  (Relevanz, Beliebt, Neu, Am besten bewertet); dazu Favoriten, „30 min max“, „max. 500 kcal“
+  (Relevanz, Beliebt, Neu, Am besten bewertet, Wenigste kcal); dazu Favoriten, „30 min max“,
+  **Kalorien** in Stufen (max. 200 / 300 / 400 / 500 / 600 / 800 kcal pro Portion – jedes Antippen
+  nimmt die nächste Stufe; Rezepte, die pro Stück oder Glas angegeben sind, zählen hier nicht mit)
   und alle Kategorien – „Vegan“ oder „Vegetarisch“ finden jetzt alle passenden Rezepte, auch wenn
   das nicht die erste Kategorie ist. Neue Rezepte (letzte 14 Tage) sind mit „Neu“ markiert.
 - **Nährwerte** (kcal, Kohlenhydrate, Fett, Eiweiß) stehen auf der Rezeptseite.
