@@ -22,7 +22,9 @@ import android.widget.TextView
 import app.toque.Prefs
 import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
+import app.toque.core.recipes.RecipeDates
 import app.toque.core.recipes.RecipeFilter
+import app.toque.core.recipes.RecipeSort
 import app.toque.core.recipes.SearchIndex
 import app.toque.ui.Icon
 import app.toque.ui.ImageLoader
@@ -135,11 +137,25 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         fun chip(label: String, selected: Boolean, f: RecipeFilter) {
             chips.addView(Ui.toggleChip(c, label, selected) { filter = f; buildChips(); search() }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
         }
-        val base = RecipeFilter()
+        // Le tri reste quand on change de filtre ; une touche le fait passer au suivant.
+        val sorts = RecipeSort.values()
+        val next = sorts[(filter.sort.ordinal + 1) % sorts.size]
+        chips.addView(Ui.toggleChip(c, "⇅ " + sortLabel(filter.sort), filter.sort != RecipeSort.RELEVANCE) {
+            filter = filter.copy(sort = next); buildChips(); search()
+        }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 16))
+        val base = RecipeFilter(sort = filter.sort)
         chip(tr("Toutes"), filter == base, base)
         chip(tr("Favoris"), filter.favoritesOnly, base.copy(favoritesOnly = true))
         chip(tr("30 min max"), filter.maxMinutes == 30, base.copy(maxMinutes = 30))
+        chip(tr("%d kcal max", KCAL_LIMIT), filter.maxKcal == KCAL_LIMIT, base.copy(maxKcal = KCAL_LIMIT))
         for (cat in a.app.recipes.index.categories.take(30)) chip(cat, filter.category == cat, base.copy(category = cat))
+    }
+
+    private fun sortLabel(s: RecipeSort): String = when (s) {
+        RecipeSort.RELEVANCE -> tr("Pertinence")
+        RecipeSort.POPULAR -> tr("Populaires")
+        RecipeSort.NEWEST -> tr("Nouveautés")
+        RecipeSort.RATING -> tr("Mieux notées")
     }
 
     private fun search() {
@@ -194,6 +210,8 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
     private companion object {
         /** Un seul fil de recherche partagé par tous les écrans Recettes. */
         val searchExec = Executors.newSingleThreadExecutor()
+        /** Limite du filtre calories (par portion). */
+        const val KCAL_LIMIT = 500
     }
 
     private inner class Adapter : BaseAdapter() {
@@ -239,8 +257,10 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         fun bind(e: SearchIndex.Entry) {
             title.text = e.title
             val parts = ArrayList<String>()
+            if (RecipeDates.isNew(e.published)) parts += tr("Nouveau")
             if (e.ratingCount > 0) parts += "★ " + String.format(I18n.locale, "%.1f", e.rating)
             if (e.totalMinutes > 0) parts += "${e.totalMinutes} min"
+            if (e.kcal > 0) parts += "${e.kcal} kcal"
             if (e.category.isNotBlank()) parts += e.category
             meta.text = parts.joinToString(" · ")
             star.visibility = if (a.app.recipes.isFavorite(e.id)) View.VISIBLE else View.GONE

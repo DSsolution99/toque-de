@@ -25,6 +25,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private lateinit var settingsSub: TextView
     private lateinit var resumeCard: LinearLayout
     private lateinit var resumeText: TextView
+    private lateinit var shoppingText: TextView
+    private var unsubShopping: (() -> Unit)? = null
     private var unsub: (() -> Unit)? = null
     private val tick = object : Runnable {
         override fun run() {
@@ -66,6 +68,16 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             if (r != null) a.push(CookScreen(a, r, a.prefs.guidedStep)) else { a.prefs.guidedRecipe = ""; refresh() }
         }
         left.addView(resumeCard, Ui.lp(Ui.MATCH, Ui.WRAP, t = 16))
+
+        val shopping = Ui.horizontal(c)
+        shopping.setPadding(Ui.u(22), Ui.u(14), Ui.u(18), Ui.u(14))
+        shopping.background = Ui.pressable(Ui.round(Ui.SURFACE, 24f), 24f)
+        shopping.addView(Icon(c, Icon.Kind.CHECK, Ui.ACCENT), LinearLayout.LayoutParams(Ui.u(24), Ui.u(24)).apply { rightMargin = Ui.u(14) })
+        shoppingText = Ui.ellipsize(Ui.text(c, "", 18f, Ui.TEXT, Ui.MEDIUM))
+        shopping.addView(shoppingText, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        shopping.isClickable = true
+        shopping.setOnClickListener { a.push(ShoppingScreen(a)) }
+        left.addView(shopping, Ui.lp(Ui.MATCH, Ui.WRAP, t = 12))
         root.addView(left, LinearLayout.LayoutParams(0, Ui.MATCH, 0.42f).apply { rightMargin = Ui.u(28) })
 
         val grid = Ui.vertical(c)
@@ -134,18 +146,30 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val title = if (guided.isEmpty()) null else repo.index.entries.firstOrNull { it.id == guided }?.title
         resumeCard.visibility = if (title != null) View.VISIBLE else View.GONE
         if (title != null) resumeText.text = tr("Reprendre « %s » — étape %d", title, a.prefs.guidedStep + 1)
+        refreshShopping()
+    }
+
+    private fun refreshShopping() {
+        val open = a.app.shopping.read { it.openCount }
+        shoppingText.text = when (open) {
+            0 -> tr("Liste de courses")
+            1 -> tr("Liste de courses · 1 article")
+            else -> tr("Liste de courses · %d articles", open)
+        }
     }
 
     override fun onShow() {
         refreshClock()
         refresh()
         unsub = a.app.recipes.onChange { refresh() }
+        unsubShopping = a.app.shopping.onChange { refreshShopping() }
         view.removeCallbacks(tick)
         view.postDelayed(tick, 10_000)
     }
 
     override fun onHide() {
         unsub?.invoke()
+        unsubShopping?.invoke()
         view.removeCallbacks(tick)
     }
 

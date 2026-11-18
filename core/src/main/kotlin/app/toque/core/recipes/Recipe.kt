@@ -22,7 +22,19 @@ import app.toque.core.protocol.Operation
 /** Recettes Lidl importées (site monsieur-cuisine.com ou appli d'origine) ; USER : réservé aux recettes perso. */
 enum class RecipeSource { IMPORTED, USER }
 
-data class Ingredient(val qty: String = "", val unit: String = "", val name: String, val note: String = "") {
+data class Ingredient(
+    val qty: String = "",
+    val unit: String = "",
+    val name: String,
+    val note: String = "",
+    /** Identifiant de l'ingrédient sur le site (0 : inconnu) : sert à additionner la liste de courses. */
+    val ref: Long = 0,
+    /** Rayon du magasin d'après le site (« Gemüse », « Milchprodukte »…), vide si inconnu. */
+    val aisle: String = "",
+) {
+    /** Le même ingrédient avec les quantités multipliées par [factor] (voir [Quantity]). */
+    fun scaled(factor: Double): Ingredient = if (factor == 1.0) this else copy(qty = Quantity.scale(qty, factor))
+
     val display: String
         get() = buildString {
             if (qty.isNotBlank()) append(qty.trim()).append(' ')
@@ -138,10 +150,27 @@ data class Recipe(
     /** Note moyenne sur 5 et nombre de notes sur monsieur-cuisine.com (0 : aucune). */
     val rating: Double = 0.0,
     val ratingCount: Int = 0,
+    /** Toutes les catégories du site, dans l'ordre (la première est aussi [category]). */
+    val categories: List<String> = emptyList(),
+    /** Unité des portions (« Portionen », « Stück »…), vide si inconnue. */
+    val servingUnit: String = "",
+    /** Valeurs nutritionnelles pour une portion, null si inconnues. */
+    val nutrition: Nutrition? = null,
+    /** Popularité sur le site (sans unité, plus grand = plus populaire) ; 0 si inconnue. */
+    val popularity: Double = 0.0,
+    /** Date de publication sur le site (« AAAA-MM-JJ »), vide si inconnue. */
+    val published: String = "",
+    /** Page de la recette sur le site, vide si inconnue. */
+    val url: String = "",
 ) {
     val machineSteps: Int get() = steps.count { it.machine != null }
     val allIngredients: List<Ingredient> get() = ingredients.flatMap { it.items }
+    /** Catégories pour les filtres : [categories], ou à défaut [category]. */
+    val allCategories: List<String> get() = categories.ifEmpty { listOfNotNull(category.takeIf { it.isNotBlank() }) }
 }
+
+/** Valeurs nutritionnelles d'une portion. */
+data class Nutrition(val kcal: Int, val carbsG: Double = 0.0, val fatG: Double = 0.0, val proteinG: Double = 0.0)
 
 /** Format de fichier « toque-recettes-1 » (JSON lisible et éditable). */
 object RecipeCodec {
@@ -163,10 +192,23 @@ object RecipeCodec {
         "author" to r.author,
         "rating" to r.rating,
         "ratingCount" to r.ratingCount,
+        "categories" to r.categories,
+        "servingUnit" to r.servingUnit,
+        "nutrition" to r.nutrition?.let {
+            linkedMapOf("kcal" to it.kcal, "carbsG" to it.carbsG, "fatG" to it.fatG, "proteinG" to it.proteinG)
+        },
+        "popularity" to r.popularity,
+        "published" to r.published,
+        "url" to r.url,
         "ingredients" to r.ingredients.map { g ->
             linkedMapOf(
                 "group" to g.title,
-                "items" to g.items.map { linkedMapOf("qty" to it.qty, "unit" to it.unit, "name" to it.name, "note" to it.note) },
+                "items" to g.items.map {
+                    val m = linkedMapOf<String, Any?>("qty" to it.qty, "unit" to it.unit, "name" to it.name, "note" to it.note)
+                    if (it.ref != 0L) m["ref"] = it.ref
+                    if (it.aisle.isNotEmpty()) m["aisle"] = it.aisle
+                    m
+                },
             )
         },
         "steps" to r.steps.map { s ->
@@ -198,7 +240,8 @@ object RecipeCodec {
                         val i = iAny.obj()
                         val name = i.str("name")?.trim().orEmpty()
                         if (name.isEmpty()) null
-                        else Ingredient(i.str("qty").orEmpty(), i.str("unit").orEmpty(), name, i.str("note").orEmpty())
+                        else Ingredient(i.str("qty").orEmpty(), i.str("unit").orEmpty(), name, i.str("note").orEmpty(),
+                            ref = (i["ref"] as? Number)?.toLong() ?: 0L, aisle = i.str("aisle").orEmpty())
                     }
                 }
             }
@@ -232,6 +275,15 @@ object RecipeCodec {
             author = m.str("author")?.trim().orEmpty(),
             rating = (m.double("rating") ?: 0.0).coerceIn(0.0, 5.0),
             ratingCount = (m.int("ratingCount") ?: 0).coerceAtLeast(0),
+            categories = m["categories"].list().mapNotNull { (it as? String)?.trim()?.takeIf { t -> t.isNotEmpty() } },
+            servingUnit = m.str("servingUnit")?.trim().orEmpty(),
+            nutrition = m["nutrition"]?.obj()?.let { n ->
+                val kcal = n.int("kcal") ?: return@let null
+                Nutrition(kcal, n.double("carbsG") ?: 0.0, n.double("fatG") ?: 0.0, n.double("proteinG") ?: 0.0)
+            },
+            popularity = (m.double("popularity") ?: 0.0).coerceAtLeast(0.0),
+            published = m.str("published")?.trim().orEmpty(),
+            url = m.str("url")?.trim().orEmpty(),
         )
     }
 

@@ -33,6 +33,8 @@ object McOnline {
     const val PAGE_SIZE = 100
     /** Préfixe des identifiants Toque des recettes du site (« mc- » : celles de l'appli d'origine). */
     const val ID_PREFIX = "web-"
+    /** Version des données tirées des fiches : à augmenter quand on en lit de nouvelles (tout est relu). */
+    const val DATA_VERSION = 2
 
     /** En-têtes attendus par l'API ; « device-type: web » fait renvoyer le nom des ingrédients. */
     fun headers(language: String): Map<String, String> =
@@ -70,9 +72,11 @@ object McOnline {
         val source: String = SOURCE_OFFICIAL,
         /** Modèles pour lesquels la recette est publiée (vide : inconnu, traité comme le connect). */
         val devices: List<String> = emptyList(),
+        /** Popularité sur le site (change souvent, comme la note). */
+        val popularity: Double = 0.0,
     ) {
         /** Empreinte enregistrée dans l'index de synchro : fiche modifiée, ou seulement sa note. */
-        val stamp: String get() = "$updated|${ratingText(rating)}|$ratingCount|$author"
+        val stamp: String get() = "$updated|${ratingText(rating)}|$ratingCount|$author|${ratingText(popularity)}"
     }
 
     /** Date de mise à jour d'une empreinte d'index (les anciens index n'ont que la date). */
@@ -99,6 +103,7 @@ object McOnline {
                 author = r["author"].obj().str("name")?.trim().orEmpty(),
                 rating = (r.double("rating") ?: 0.0).coerceIn(0.0, 5.0),
                 ratingCount = (r.int("totalRating") ?: 0).coerceAtLeast(0),
+                popularity = (r.double("popularity") ?: 0.0).coerceAtLeast(0.0),
                 source = r.str("source")?.trim()?.lowercase()?.ifEmpty { null } ?: SOURCE_OFFICIAL,
                 devices = devicesOf(r),
             )
@@ -202,12 +207,42 @@ object McOnline {
             author = r["author"].obj().str("name")?.trim().orEmpty(),
             rating = (r.double("rating") ?: 0.0).coerceIn(0.0, 5.0),
             ratingCount = (r.int("totalRating") ?: 0).coerceAtLeast(0),
+            categories = categories,
+            servingUnit = servingUnit,
+            nutrition = nutrition(r),
+            popularity = (r.double("popularity") ?: 0.0).coerceAtLeast(0.0),
+            published = (r.str("publishedDate") ?: r.str("createdDate"))?.trim()?.take(10).orEmpty(),
+            url = r.str("url")?.trim()?.takeIf { it.startsWith("https://") }.orEmpty(),
         )
     }
 
-    /** Recette déjà téléchargée dont seuls l'auteur ou la note ont changé sur le site. */
+    /** Valeurs nutritionnelles d'une portion (« nutrients » du site), null sans calories. */
+    private fun nutrition(r: Map<String, Any?>): Nutrition? {
+        var kcal: Double? = null
+        var carbs = 0.0
+        var fat = 0.0
+        var protein = 0.0
+        for (any in r["nutrients"].list()) {
+            val n = any.obj()
+            val name = n.str("name")?.lowercase().orEmpty()
+            val unit = n.str("unit")?.lowercase().orEmpty()
+            val v = n.double("amountFloat") ?: n.double("amount") ?: continue
+            when {
+                unit == "kcal" || name.startsWith("calor") || name.startsWith("kalor") || name == "energie" -> kcal = v
+                name.startsWith("carb") || name.startsWith("kohlenhydrat") || name.startsWith("glucide") -> carbs = v
+                name.startsWith("fat") || name.startsWith("fett") || name.startsWith("lipide") -> fat = v
+                name.startsWith("protein") || name.startsWith("eiwei") || name.startsWith("protéine") -> protein = v
+            }
+        }
+        val k = kcal ?: return null
+        if (k <= 0) return null
+        return Nutrition(Math.round(k).toInt(), carbs, fat, protein)
+    }
+
+    /** Recette déjà téléchargée dont seuls l'auteur, la note ou la popularité ont changé sur le site. */
     fun withScore(r: Recipe, e: Entry): Recipe =
-        r.copy(author = e.author.ifEmpty { r.author }, rating = e.rating, ratingCount = e.ratingCount)
+        r.copy(author = e.author.ifEmpty { r.author }, rating = e.rating, ratingCount = e.ratingCount,
+            popularity = if (e.popularity > 0) e.popularity else r.popularity)
 
     // ------------------------------------------------------------------ avis
 
@@ -268,6 +303,8 @@ object McOnline {
                 qty = i.str("amount")?.trim()?.removeSuffix(".0").orEmpty(),
                 unit = i.str("unit")?.trim().orEmpty(),
                 name = name,
+                ref = i["systemIngredientId"].long() ?: 0L,
+                aisle = i["ingredientCategory"].obj().str("name")?.trim().orEmpty(),
             )
         }
         return byGroup.mapNotNull { (id, items) ->

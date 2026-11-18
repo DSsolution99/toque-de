@@ -1,0 +1,26 @@
+# Prüft jeden Arbeitszweig: Tests und Build, ohne etwas zu veröffentlichen.
+name: Check
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Tests and build
+        run: ./gradlew --no-daemon :core:test :app:assembleDebug
+      - name: Test report
+        if: failure()
+        run: |
+          for f in core/build/test-results/test/*.xml; do
+            grep -l "<failure" "$f" >/dev/null 2>&1 && grep -B2 -A12 "<failure" "$f" | head -60
+          done || true

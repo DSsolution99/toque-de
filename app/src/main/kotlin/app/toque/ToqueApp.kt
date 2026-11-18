@@ -10,6 +10,7 @@ import android.os.Process
 import app.toque.core.i18n.I18n
 import app.toque.machine.MachineClient
 import app.toque.recipes.RecipeRepo
+import app.toque.recipes.ShoppingRepo
 import app.toque.ui.MainActivity
 import java.util.Locale
 
@@ -20,6 +21,7 @@ class ToqueApp : Application() {
         private set
     val machine: MachineClient by lazy { MachineClient(this) }
     val recipes: RecipeRepo by lazy { RecipeRepo(this) }
+    val shopping: ShoppingRepo by lazy { ShoppingRepo(this) }
 
     override fun onCreate() {
         super.onCreate()

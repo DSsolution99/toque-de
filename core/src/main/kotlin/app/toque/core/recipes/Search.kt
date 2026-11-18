@@ -69,12 +69,19 @@ object TextNorm {
     }
 }
 
+/** Ordre de la liste : pertinence (ou alphabétique sans recherche), popularité, nouveauté, note. */
+enum class RecipeSort { RELEVANCE, POPULAR, NEWEST, RATING }
+
 /** Filtres de la liste de recettes. */
 data class RecipeFilter(
+    /** Catégorie cherchée parmi toutes celles de la recette (« Vegan » peut être la deuxième). */
     val category: String = "",
     val favoritesOnly: Boolean = false,
     val source: RecipeSource? = null,
     val maxMinutes: Int = 0,
+    /** Calories maximales par portion (0 : pas de limite ; recettes sans valeur exclues sinon). */
+    val maxKcal: Int = 0,
+    val sort: RecipeSort = RecipeSort.RELEVANCE,
 )
 
 /**
@@ -97,6 +104,12 @@ class SearchIndex(recipes: List<Recipe>) {
         val normTitle: String,
         val rating: Double = 0.0,
         val ratingCount: Int = 0,
+        val categories: List<String> = emptyList(),
+        /** Calories par portion, 0 si inconnues. */
+        val kcal: Int = 0,
+        val popularity: Double = 0.0,
+        /** Date de publication « AAAA-MM-JJ », vide si inconnue. */
+        val published: String = "",
     )
 
     data class Hit(val entry: Entry, val score: Double, val matched: Int)
@@ -117,7 +130,8 @@ class SearchIndex(recipes: List<Recipe>) {
         val list = ArrayList<Entry>(recipes.size)
         for ((index, r) in recipes.withIndex()) {
             list += Entry(r.id, r.title, r.category, r.tags, r.favorite, r.source, r.totalMinutes, r.image,
-                r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount)
+                r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount,
+                r.allCategories, r.nutrition?.kcal ?: 0, r.popularity, r.published)
             fun add(text: String, w: Int) {
                 for (t in TextNorm.tokens(text)) {
                     val p = postings.getOrPut(t) { HashMap(4) }
@@ -127,6 +141,7 @@ class SearchIndex(recipes: List<Recipe>) {
             }
             add(r.title, W_TITLE)
             add(r.category, W_TAG)
+            for (cat in r.categories) add(cat, W_TAG)
             for (t in r.tags) add(t, W_TAG)
             for (i in r.allIngredients) add(i.name, W_INGREDIENT)
             for (s in r.steps) add(s.text, W_STEP)
@@ -135,8 +150,12 @@ class SearchIndex(recipes: List<Recipe>) {
         vocabulary = postings.keys.toTypedArray().also { java.util.Arrays.sort(it) }
     }
 
+    /** Catégories présentes, les plus fréquentes d'abord (à égalité, par ordre alphabétique). */
     val categories: List<String> by lazy {
-        entries.map { it.category }.filter { it.isNotBlank() }.distinct().sortedBy { TextNorm.normalize(it) }
+        val counts = HashMap<String, Int>()
+        for (e in entries) for (cat in e.categories) if (cat.isNotBlank()) counts[cat] = (counts[cat] ?: 0) + 1
+        counts.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { TextNorm.normalize(it.key) })
+            .map { it.key }
     }
 
     private fun prefixMatches(token: String): List<String> {
@@ -170,7 +189,8 @@ class SearchIndex(recipes: List<Recipe>) {
     }
 
     private fun accepts(e: Entry, f: RecipeFilter): Boolean {
-        if (f.category.isNotEmpty() && e.category != f.category) return false
+        if (f.category.isNotEmpty() && e.category != f.category && f.category !in e.categories) return false
+        if (f.maxKcal > 0 && (e.kcal <= 0 || e.kcal > f.maxKcal)) return false
         if (f.favoritesOnly && !e.favorite) return false
         if (f.source != null && e.source != f.source) return false
         if (f.maxMinutes > 0 && (e.totalMinutes <= 0 || e.totalMinutes > f.maxMinutes)) return false
@@ -180,9 +200,11 @@ class SearchIndex(recipes: List<Recipe>) {
     fun search(query: String, filter: RecipeFilter = RecipeFilter(), limit: Int = 500): List<Hit> {
         val tokens = TextNorm.tokens(query).distinct()
         if (tokens.isEmpty()) {
-            return entries.filter { accepts(it, filter) }
-                .sortedWith(compareByDescending<Entry> { it.favorite }.thenBy { it.normTitle })
-                .take(limit).map { Hit(it, 0.0, 0) }
+            val base = entries.filter { accepts(it, filter) }
+            val sorted = if (filter.sort == RecipeSort.RELEVANCE)
+                base.sortedWith(compareByDescending<Entry> { it.favorite }.thenBy { it.normTitle })
+            else base.sortedWith(order(filter.sort))
+            return sorted.take(limit).map { Hit(it, 0.0, 0) }
         }
         val perToken = tokens.map { tok ->
             val scores = HashMap<Int, Double>()
@@ -215,7 +237,19 @@ class SearchIndex(recipes: List<Recipe>) {
         }
         val full = hits.filter { it.matched == tokens.size }
         val result = if (full.isNotEmpty()) full else hits
-        return result.sortedWith(compareByDescending<Hit> { it.score }.thenBy { it.entry.normTitle }).take(limit)
+        val byScore = compareByDescending<Hit> { it.score }.thenBy { it.entry.normTitle }
+        val ordered = if (filter.sort == RecipeSort.RELEVANCE) result.sortedWith(byScore)
+        else { val o = order(filter.sort); result.sortedWith(Comparator { x, y -> o.compare(x.entry, y.entry) }) }
+        return ordered.take(limit)
+    }
+
+    /** Ordre d'un tri autre que la pertinence (à égalité, par titre). */
+    private fun order(sort: RecipeSort): Comparator<Entry> = when (sort) {
+        RecipeSort.POPULAR -> compareByDescending<Entry> { it.popularity }.thenByDescending { it.ratingCount }.thenBy { it.normTitle }
+        RecipeSort.NEWEST -> compareByDescending<Entry> { it.published }.thenBy { it.normTitle }
+        RecipeSort.RATING -> compareByDescending<Entry> { if (it.ratingCount >= 5) it.rating else 0.0 }
+            .thenByDescending { it.ratingCount }.thenBy { it.normTitle }
+        RecipeSort.RELEVANCE -> compareBy<Entry> { it.normTitle }
     }
 
     /** « Qu'est-ce que je peux faire avec… » : classe par nombre d'ingrédients présents. */

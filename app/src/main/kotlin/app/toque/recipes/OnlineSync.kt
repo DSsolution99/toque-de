@@ -50,8 +50,10 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
 
     private fun run(progress: (String) -> Unit): LidlSync.Report {
         val language = McOnline.languageFor(I18n.code)
+        // Langue et version des données : si l'une change, toutes les fiches sont retéléchargées.
+        val indexKey = "$language|v${McOnline.DATA_VERSION}"
         val stored = readIndex()
-        val index = if (stored.first == language) HashMap(stored.second) else HashMap()
+        val index = if (stored.first == indexKey) HashMap(stored.second) else HashMap()
 
         // 1. Liste complète (résumés).
         progress(tr("Liste des recettes…"))
@@ -90,9 +92,9 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
             val r = repo.get(McOnline.toqueId(e.apiId)) ?: continue
             rescored += McOnline.withScore(r, e)
             index[key] = e.stamp
-            if (rescored.size >= 100) save(rescored, index, language)
+            if (rescored.size >= 100) save(rescored, index, indexKey)
         }
-        save(rescored, index, language)
+        save(rescored, index, indexKey)
         val batch = ArrayList<Recipe>()
         var failures = 0
         var inARow = 0
@@ -108,21 +110,21 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
                 inARow++
                 log.write("synchro", "recette ${e.apiId} : ${ex.message}")
                 if (inARow >= 5) {
-                    save(batch, index, language)
+                    save(batch, index, indexKey)
                     return LidlSync.Report(false, tr("Serveur de recettes injoignable : %s", ex.message ?: ex.toString()))
                 }
             }
-            if (batch.size >= 25) save(batch, index, language)
+            if (batch.size >= 25) save(batch, index, indexKey)
             pause(250)
         }
-        save(batch, index, language)
+        save(batch, index, indexKey)
 
         // 3. Le catalogue suit la liste du site (recettes retirées supprimées).
         val keep = entries.map { McOnline.toqueId(it.apiId) }.toHashSet()
         repo.removeAllExcept(keep, rebuild = false)
         val kept = entries.map { it.apiId.toString() }.toHashSet()
         index.keys.retainAll(kept)
-        writeIndex(language, index)
+        writeIndex(indexKey, index)
         repo.refresh()
 
         // 4. Photos manquantes.
