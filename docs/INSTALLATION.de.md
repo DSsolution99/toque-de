@@ -275,6 +275,34 @@ nächsten Synchronisieren alles in der neuen Sprache neu geladen.
 **Rühraufsatz:** Diese Version erkennt den „Rühraufsatz“ in deutschen Rezepten und begrenzt dann
 wie vorgesehen auf höchstens Stufe 4, ohne Turbo.
 
+### Rezepte finden, Portionen, Einkaufsliste
+
+- **Filter und Sortierung** in der Rezeptliste: die erste Taste wechselt die Reihenfolge
+  (Relevanz, Beliebt, Neu, Am besten bewertet); dazu Favoriten, „30 min max“, „max. 500 kcal“
+  und alle Kategorien – „Vegan“ oder „Vegetarisch“ finden jetzt alle passenden Rezepte, auch wenn
+  das nicht die erste Kategorie ist. Neue Rezepte (letzte 14 Tage) sind mit „Neu“ markiert.
+- **Nährwerte** (kcal, Kohlenhydrate, Fett, Eiweiß) stehen auf der Rezeptseite.
+- **Portionen:** mit − und + neben „Zutaten“. Die Mengen werden umgerechnet; Zeiten,
+  Wiegeschritte und Geräteeinstellungen gelten weiter für die Originalmenge (Hinweis in Gelb).
+- **Einkaufsliste:** Taste **+** auf der Rezeptseite. Gleiche Zutaten aus mehreren Rezepten
+  werden zusammengezählt (bei gleicher Einheit) und nach Warengruppe sortiert. Die Liste ist auf
+  der Startseite und am Handy erreichbar; antippen = abgehakt.
+
+### Am Handy
+
+Das Handy muss im selben WLAN wie das Gerät sein. In **Einstellungen › Handy (Weboberfläche)**
+steht die Adresse, z. B. `http://192.168.178.42:8080`: im Handy-Browser öffnen (Tipp: „Zum
+Home-Bildschirm“ hinzufügen, dann wirkt sie wie eine App).
+
+- Rezepte suchen und ansehen, mit Filtern, Portionen und Nährwerten.
+- **„Am Gerät öffnen“** zeigt das Rezept auf dem Bildschirm des Monsieur Cuisine. Gestartet wird
+  immer am Gerät; während ein Programm läuft, öffnet sich nichts.
+- Favoriten und Einkaufsliste – dieselben wie auf dem Gerät.
+- Oben eine Statuszeile, solange ein Programm läuft (Restzeit, Temperatur).
+
+Die Weboberfläche ist nur im Heimnetz erreichbar und kann in den Einstellungen ausgeschaltet
+werden. Sie kann nichts starten, nur anzeigen, Rezepte öffnen und die Liste ändern.
+
 ### Im Alltag
 
 - Toque öffnet sich beim Einschalten von selbst.

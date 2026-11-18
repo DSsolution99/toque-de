@@ -26,6 +26,7 @@ object WebTexts {
         "steps" to trKey("Étapes"),
         "servings" to trKey("%d pers."),
         "perServing" to trKey("par portion"),
+        "perOf" to trKey("pour 1 sur %d %s"),
         "nutrition" to trKey("%d kcal · glucides %s g · lipides %s g · protéines %s g"),
         "scaled" to trKey("Quantités recalculées. Les temps, pesées et réglages des étapes restent ceux de la recette pour %d : adaptez-les si besoin."),
         "openOnDevice" to trKey("Ouvrir sur le robot"),

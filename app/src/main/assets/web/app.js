@@ -146,7 +146,8 @@ function renderDetail() {
   html += `<h2>${esc(r.title)}</h2><div class="meta">${meta.map(esc).join(" · ")}</div>`;
   if (r.nutrition) {
     const n = r.nutrition;
-    html += `<div class="meta">${esc(T("nutrition", n.kcal, num(n.carbsG), num(n.fatG), num(n.proteinG)))} (${esc(T("perServing"))})</div>`;
+    const per = r.servings > 0 && r.servingUnit ? T("perOf", r.servings, r.servingUnit) : T("perServing");
+    html += `<div class="meta">${esc(T("nutrition", n.kcal, num(n.carbsG), num(n.fatG), num(n.proteinG)))} (${esc(per)})</div>`;
   }
   html += `<div class="actions">
     <button class="btn primary" id="open">▶ ${esc(T("openOnDevice"))}</button>
@@ -191,7 +192,7 @@ function renderDetail() {
   };
   $("shop").onclick = async () => {
     try {
-      await post("/api/shopping/add", { id: r.id, servings: r.wanted });
+      renderShopping(await post("/api/shopping/add", { id: r.id, servings: r.wanted }));
       toast(T("added", r.ingredients.reduce((n, g) => n + g.items.length, 0)));
     } catch (e) { toast(T("offline")); }
   };
