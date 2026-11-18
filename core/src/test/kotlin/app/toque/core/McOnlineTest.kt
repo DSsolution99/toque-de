@@ -119,4 +119,69 @@ class McOnlineTest {
         assertTrue(McOnline.listUrl(2).contains("/page/2/size/100?"))
         assertTrue(McOnline.listUrl(1).contains("MC2.0"))
     }
+
+    @Test fun whiskInGermanAndFrenchRecipes() {
+        assertTrue(McOnline.mentionsWhisk("Den Rühraufsatz in den Mixbehälter einsetzen."))
+        assertTrue(McOnline.mentionsWhisk("Insérer le fouet."))
+        assertTrue(McOnline.mentionsWhisk("Insert the whisk."))
+        assertTrue(!McOnline.mentionsWhisk("Die Zwiebeln in den Mixbehälter geben."))
+    }
+
+    private fun entry(id: Long, name: String, source: String = "official", vararg devices: String, ratings: Int = 0) =
+        McOnline.Entry(id, "", name, ratingCount = ratings, source = source, devices = devices.toList())
+
+    @Test fun listAsksForEveryModelAndSource() {
+        val url = McOnline.listUrl(1)
+        for (d in McOnline.DEVICES) assertTrue(url.contains("filters%5BdeviceTypes%5D%5B%5D=$d"))
+        assertTrue(!url.contains("source"))
+    }
+
+    @Test fun sameTitleWithWordsInAnotherOrder() {
+        assertEquals(McOnline.titleKey("Gefüllte Paprika mit Djuvec-Reis"), McOnline.titleKey("Paprika mit Djuvec-Reis, gefüllte"))
+        assertEquals(McOnline.titleKey("Möhrenbrei, der allererste"), McOnline.titleKey("Der allererste Möhrenbrei "))
+        assertTrue(McOnline.titleKey("Kuchen mit Zucker") != McOnline.titleKey("Kuchen ohne Zucker"))
+    }
+
+    @Test fun oneRecipePerTitle() {
+        val list = listOf(
+            entry(1, "Datteldip mit Curry", "official", "MC1.1", ratings = 28),
+            entry(2, "Datteldip mit Curry", "official", "MC0.5", ratings = 138),
+            entry(3, "Datteldip mit Curry", "official", "MC2.0", "MC3.0", ratings = 18724),
+            entry(4, "Eierlikör", "member", "MC3.0", ratings = 9999),
+            entry(5, "Eierlikör", "official", "MC3.0", ratings = 5),
+            entry(6, "Pizzateig", "member", "MC3.0", ratings = 412),
+            entry(7, "Pizzateig", "member", "MC3.0", ratings = 9850),
+            entry(8, "Kräuterbutter", "official", "MC9.9"),
+            entry(9, "Tiramisu", "official", "MC1.1"),
+        )
+        val kept = McOnline.dedupe(list).map { it.apiId }
+        // Connect vor den anderen Modellen, offiziell vor Community, sonst die meisten Bewertungen;
+        // unbekannte Modelle fallen weg, ein Rezept nur für ein altes Modell bleibt.
+        assertEquals(listOf(3L, 5L, 7L, 9L), kept)
+        // Bei Gleichstand bleibt das Rezept, das schon im Katalog ist (Favoriten bleiben erhalten).
+        assertEquals(listOf(3L, 5L, 6L, 9L), McOnline.dedupe(list, present = setOf(6L)).map { it.apiId })
+    }
+
+    @Test fun pageReadsSourceAndModels() {
+        val json = """{"data":{"total":1,"totalPage":1,"recipes":[
+            {"id":10,"name":"Bolognese","source":"member","deviceTypes":["MC3.0"]}]}}"""
+        val e = McOnline.parsePage(json).entries.single()
+        assertEquals("member", e.source)
+        assertEquals(listOf("MC3.0"), e.devices)
+        // Ohne Angaben: offiziell, wie bisher.
+        assertEquals("official", McOnline.parsePage(fixture("mc-online-page.json")).entries[0].source)
+    }
+
+    @Test fun textOnlyRecipeOfAnOlderModel() {
+        val json = """{"data":{"recipe":{"id":11,"name":"Dip","source":"member","deviceTypes":["MC1.1"],
+            "servingSizes":[{"id":1,"amount":4,"servingUnit":"Portionen",
+              "steps":[{"order":0,"name":"Mode","description":"","deviceSetting":null}],
+              "instruction":"<p>Datteln 6 Sekunden/Stufe 10 zerkleinern.</p><p>Frischkäse zugeben, 15 Sekunden/Stufe 4 verrühren.</p><p>TIPPS: Kalt servieren.</p>"}]}}}"""
+        val r = McOnline.parseRecipe(json)!!
+        assertEquals(listOf("Datteln 6 Sekunden/Stufe 10 zerkleinern.", "Frischkäse zugeben, 15 Sekunden/Stufe 4 verrühren."), r.steps.map { it.text })
+        assertTrue(r.steps.all { it.machine == null })
+        assertTrue(r.notes.contains("TIPPS: Kalt servieren."))
+        assertTrue(r.notes.contains("autre modèle"))
+        assertTrue(r.tags.contains("Communauté"))
+    }
 }

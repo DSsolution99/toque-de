@@ -55,7 +55,7 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
 
         // 1. Liste complète (résumés).
         progress(tr("Liste des recettes…"))
-        val entries = ArrayList<McOnline.Entry>()
+        val listed = ArrayList<McOnline.Entry>()
         var page = 1
         var pages = 1
         while (page <= pages) {
@@ -65,15 +65,20 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
                 return LidlSync.Report(false, tr("Serveur de recettes injoignable : %s", e.message ?: e.toString()))
             }
             pages = p.totalPages.coerceIn(1, 1000)
-            entries += p.entries
+            listed += p.entries
             progress(tr("Liste des recettes… %d / %d", page, pages))
             page++
             pause(300)
         }
-        if (entries.isEmpty()) return LidlSync.Report(false, tr("Aucune recette reçue du serveur"))
+        if (listed.isEmpty()) return LidlSync.Report(false, tr("Aucune recette reçue du serveur"))
+
+        // Une seule recette par titre (même recette publiée pour plusieurs modèles, variantes de la
+        // communauté) ; à rang égal, celle déjà présente reste, avec ses favoris.
+        val present = repo.ids()
+        val entries = McOnline.dedupe(listed, present.mapNotNull { McOnline.apiIdOf(it) }.toHashSet())
+        log.write("synchro", "${listed.size} recettes sur le site, ${entries.size} sans doublons")
 
         // 2. Fiches nouvelles ou modifiées ; pour les autres, seuls l'auteur et la note sont mis à jour.
-        val present = repo.ids()
         val todo = entries.filter { e ->
             McOnline.updatedOf(index[e.apiId.toString()]) != e.updated || McOnline.toqueId(e.apiId) !in present
         }
@@ -188,7 +193,7 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
             try {
                 c.connectTimeout = 20_000
                 c.readTimeout = 30_000
-                c.setRequestProperty("User-Agent", "Toque/$version (Android; +https://github.com/Wuki60/MrCuisineVibeConnect)")
+                c.setRequestProperty("User-Agent", "Toque/$version (Android; +https://github.com/DSsolution99/toque-de)")
                 for ((k, v) in headers) c.setRequestProperty(k, v)
                 val code = c.responseCode
                 if ((code == 429 || code >= 500) && attempt < 4) {

@@ -14,13 +14,22 @@ import app.toque.core.machine.Accessory
  * Recettes publiées sur monsieur-cuisine.com, lues directement par l'API publique du site
  * (sans compte, sans l'appli d'origine) puis converties au modèle de Toque.
  *
- * Seules les recettes officielles du Monsieur Cuisine connect sont demandées. Chaque étape
- * porte son réglage machine (mode « customized », balance, turbo, vapeur, rissoler, pétrir).
+ * Sont demandées les recettes des modèles de [DEVICES] (officielles et de la communauté) ; une même
+ * recette publiée pour plusieurs modèles, ou sous un titre aux mots dans un autre ordre, n'est
+ * gardée qu'une fois (voir [dedupe]). Chaque étape porte son réglage machine (mode « customized »,
+ * balance, turbo, vapeur, rissoler, pétrir).
  */
 object McOnline {
     const val API = "https://mc-api.tecpal.com"
     /** Monsieur Cuisine connect. */
     const val DEVICE = "MC2.0"
+    /**
+     * Modèles dont les recettes sont reprises, du plus adapté au Monsieur Cuisine connect au moins
+     * adapté : connect, smart, puis les anciens modèles (MC1.1 : texte seul, sans réglage par étape).
+     */
+    val DEVICES = listOf(DEVICE, "MC3.0", "MC0.5", "MC1.1")
+    const val SOURCE_OFFICIAL = "official"
+    const val SOURCE_MEMBER = "member"
     const val PAGE_SIZE = 100
     /** Préfixe des identifiants Toque des recettes du site (« mc- » : celles de l'appli d'origine). */
     const val ID_PREFIX = "web-"
@@ -30,7 +39,7 @@ object McOnline {
         linkedMapOf("Accept" to "application/json", "Accept-Language" to language, "device-type" to "web")
 
     fun listUrl(page: Int): String =
-        "$API/api/v2/recipes/page/$page/size/$PAGE_SIZE?filters%5BdeviceTypes%5D%5B%5D=$DEVICE&filters%5Bsource%5D%5B%5D=official"
+        "$API/api/v2/recipes/page/$page/size/$PAGE_SIZE?" + DEVICES.joinToString("&") { "filters%5BdeviceTypes%5D%5B%5D=$it" }
 
     fun recipeUrl(apiId: Long): String = "$API/api/v2/recipes/$apiId"
 
@@ -57,6 +66,10 @@ object McOnline {
         val author: String = "",
         val rating: Double = 0.0,
         val ratingCount: Int = 0,
+        /** « official » ou « member » (recette de la communauté). */
+        val source: String = SOURCE_OFFICIAL,
+        /** Modèles pour lesquels la recette est publiée (vide : inconnu, traité comme le connect). */
+        val devices: List<String> = emptyList(),
     ) {
         /** Empreinte enregistrée dans l'index de synchro : fiche modifiée, ou seulement sa note. */
         val stamp: String get() = "$updated|${ratingText(rating)}|$ratingCount|$author"
@@ -86,9 +99,50 @@ object McOnline {
                 author = r["author"].obj().str("name")?.trim().orEmpty(),
                 rating = (r.double("rating") ?: 0.0).coerceIn(0.0, 5.0),
                 ratingCount = (r.int("totalRating") ?: 0).coerceAtLeast(0),
+                source = r.str("source")?.trim()?.lowercase()?.ifEmpty { null } ?: SOURCE_OFFICIAL,
+                devices = devicesOf(r),
             )
         }
         return Page(d.int("total") ?: entries.size, d.int("totalPage") ?: 1, entries)
+    }
+
+    private fun devicesOf(r: Map<String, Any?>): List<String> =
+        r["deviceTypes"].list().mapNotNull { (it as? String)?.trim()?.takeIf { d -> d.isNotEmpty() } }
+
+    // ------------------------------------------------------------------ doublons
+
+    /** Rang d'une recette (plus petit = préférée) : officielle avant communauté, puis modèle de [DEVICES]. */
+    fun rank(e: Entry): Int {
+        val devices = e.devices.ifEmpty { listOf(DEVICE) }
+        val device = DEVICES.indexOfFirst { it in devices }.let { if (it < 0) DEVICES.size else it }
+        return (if (e.source == SOURCE_OFFICIAL) 0 else 100) + device
+    }
+
+    /** Recette d'un modèle repris (les modèles inconnus sont ignorés). */
+    fun supported(e: Entry): Boolean = e.devices.isEmpty() || e.devices.any { it in DEVICES }
+
+    /**
+     * Clé de comparaison des titres : mêmes mots, sans accents, casse, ponctuation, pluriels simples
+     * ni ordre (« Paprika, gefüllte » = « Gefüllte Paprika »). Les petits mots comptent (« mit » ≠ « ohne »).
+     */
+    fun titleKey(name: String): String =
+        TextNorm.normalize(name).split(' ').filter { it.isNotEmpty() }.map { TextNorm.stem(it) }.distinct().sorted().joinToString(" ")
+
+    /**
+     * Une seule recette par titre : la mieux classée par [rank] ; à rang égal, celle déjà dans le
+     * catalogue ([present], pour que le choix ne change pas d'une synchro à l'autre et garde les
+     * favoris), puis la plus notée. L'ordre de la liste est conservé.
+     */
+    fun dedupe(entries: List<Entry>, present: Set<Long> = emptySet()): List<Entry> {
+        val order = compareBy<Entry>({ rank(it) }, { if (it.apiId in present) 0 else 1 }, { -it.ratingCount }, { it.apiId })
+        val best = LinkedHashMap<String, Entry>()
+        for (e in entries) {
+            if (!supported(e)) continue
+            val key = titleKey(e.name).ifEmpty { "#" + e.apiId }
+            val current = best[key]
+            if (current == null || order.compare(e, current) < 0) best[key] = e
+        }
+        return ArrayList(best.values)
     }
 
     /** Fiche complète (réponse de [recipeUrl]) convertie en recette Toque ; null si inutilisable. */
@@ -105,18 +159,30 @@ object McOnline {
         val categories = r["categories"].list().mapNotNull { it.obj().str("name")?.trim()?.takeIf { n -> n.isNotEmpty() } }
         val tags = r["tags"].list().mapNotNull { t ->
             (if (t is String) t else t.obj().str("name"))?.trim()?.takeIf { it.isNotEmpty() }
-        }
+        }.toMutableList()
+        if (r.str("source")?.trim()?.lowercase() == SOURCE_MEMBER) tags += tr("Communauté")
+        val devices = devicesOf(r)
 
         val notes = ArrayList<String>()
         val servingUnit = size.str("servingUnit")?.trim().orEmpty()
         val amount = size.int("amount") ?: 0
         if (amount > 0 && servingUnit.isNotEmpty() && !servingUnit.lowercase().startsWith("portion") &&
             !servingUnit.lowercase().startsWith("pers")) notes += tr("Pour %d %s", amount, servingUnit)
+        if (devices.isNotEmpty() && DEVICE !in devices)
+            notes += tr("Recette prévue pour un autre modèle de Monsieur Cuisine : vérifiez chaque réglage avant de lancer.")
         plain(r.str("description"))?.let { notes += it }
         plain(r.str("hintsAndTips"))?.let { notes += it }
 
-        val steps = steps(size["steps"].list().map { it.obj() })
-        if (steps.isEmpty()) plain(size.str("instruction"))?.let { notes += it }
+        val rawSteps = size["steps"].list().map { it.obj() }
+        var steps = steps(rawSteps)
+        // Recettes en texte seul (anciens modèles) : une étape vide « Mode » et tout dans « instruction ».
+        val instruction = plain(size.str("instruction"))
+        if (instruction != null && steps.none { it.machine != null || it.weigh != null } &&
+            rawSteps.all { it.str("description").isNullOrBlank() }) {
+            val (tips, paragraphs) = paragraphs(instruction).partition { TIP.containsMatchIn(it) }
+            steps = paragraphs.map { Step(it) }
+            notes += tips
+        }
 
         val thumb = r["thumbnail"].obj().str("landscape") ?: r["detailsImage"].obj().str("landscape")
         return Recipe(
@@ -267,7 +333,7 @@ object McOnline {
                     speed = speed,
                     tempC = (st.int("temperature") ?: 0).coerceAtLeast(0),
                     reverse = reverse,
-                    accessory = if (text.lowercase().contains("fouet") && speed <= 4) Accessory.WHISK else Accessory.BLADE,
+                    accessory = if (mentionsWhisk(text) && speed <= 4) Accessory.WHISK else Accessory.BLADE,
                 )
             }
             mode == "turbo" -> StepMachine(program = StepProgram.TURBO, seconds = seconds, pulses = maxOf(1, seconds))
@@ -276,6 +342,26 @@ object McOnline {
             mode.startsWith("kneading") -> StepMachine(program = StepProgram.KNEAD, seconds = seconds)
             else -> null
         }
+    }
+
+    /**
+     * Le texte de l'étape parle-t-il du fouet ? Les recettes arrivent dans la langue de l'interface :
+     * « fouet » (fr), « Rühraufsatz » (de, terme des recettes Lidl), « whisk » (en).
+     */
+    fun mentionsWhisk(text: String): Boolean {
+        val t = text.lowercase()
+        return WHISK_WORDS.any { t.contains(it) }
+    }
+
+    private val WHISK_WORDS = listOf("fouet", "rühraufsatz", "ruehraufsatz", "schneebesen", "whisk")
+
+    /** Paragraphe de conseils (« Tipps: », « Astuce : »…), rangé dans les notes plutôt qu'en étape. */
+    private val TIP = Regex("(?i)^(tipps?|tip|hinweis|astuces?|conseils?)\\s*[:：]")
+
+    /** Paragraphes d'un texte (séparés par une ligne vide, sinon une ligne par paragraphe). */
+    private fun paragraphs(text: String): List<String> {
+        val blocks = text.split(Regex("\n\\s*\n")).map { it.trim() }.filter { it.isNotEmpty() }
+        return if (blocks.size > 1) blocks else text.lines().map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     /** Texte brut à partir d'un éventuel HTML léger. */

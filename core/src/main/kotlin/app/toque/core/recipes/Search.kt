@@ -9,6 +9,9 @@ object TextNorm {
         "de", "du", "des", "la", "le", "les", "l", "d", "et", "a", "au", "aux", "en", "un", "une",
         "pour", "sur", "par", "ou", "son", "sa", "ses", "mon", "ma", "mes", "the", "of", "with", "y",
         "recette", "recettes",
+        // allemand (« für » donne « fur » une fois les accents retirés)
+        "der", "die", "das", "den", "dem", "und", "oder", "mit", "von", "vom", "im", "in",
+        "zu", "zum", "zur", "aus", "auf", "fur", "ein", "eine", "einen", "rezept", "rezepte",
     )
 
     fun normalize(s: String): String {

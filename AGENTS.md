@@ -211,6 +211,10 @@ and without macFUSE the FUSE package stops mtkclient from starting
 - Recipes: Settings › Lidl recipes › Sync (monsieur-cuisine.com, no account). Nightly re-sync.
 - Clock: set automatically (time zone from the Internet connection); Settings › Date and time.
 - To work on the robot later over Wi-Fi: `adb connect <robot IP>:5555`.
+- German interface and recipes: built into this version (toque-de). If Android on the robot is not in
+  German, select *Réglages › Langue · Language › Deutsch*, then sync the Lidl recipes. Only on a stock Toque
+  without German, `bash tools/install-deutsch.sh` (or `--ip <robot IP>` after `wifi`) copies the language file.
+  The German guide for the person is [docs/INSTALLATION.de.md](docs/INSTALLATION.de.md).
 
 ## Working on the code
 

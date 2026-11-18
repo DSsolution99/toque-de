@@ -1,6 +1,12 @@
 # MrCuisineVibeConnect
 
 🇫🇷 **[Version française](README.fr.md)**
+🇩🇪 **[Deutsche Anleitung (Mac): Installation, deutsche Oberfläche und Rezepte](docs/INSTALLATION.de.md)**
+
+> **toque-de** ist eine eigene Version auf Basis von [Wuki60/MrCuisineVibeConnect](https://github.com/Wuki60/MrCuisineVibeConnect)
+> und dessen Mac-Fassung [flexbox/MrCuisineVibeConnect](https://github.com/flexbox/MrCuisineVibeConnect):
+> deutsche Oberfläche, Erkennung des „Rühraufsatz“, rund 2.700 deutsche Lidl-Rezepte ohne Doppel
+> (offizielle und Community-Rezepte aller Modelle). Updates kommen aus den Releases dieses Repositorys.
 
 > **macOS version.** This is a copy of [Wuki60/MrCuisineVibeConnect](https://github.com/Wuki60/MrCuisineVibeConnect)
 > whose install tools run on a **Mac**: shell scripts instead of PowerShell, and

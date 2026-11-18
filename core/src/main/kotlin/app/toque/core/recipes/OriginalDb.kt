@@ -211,7 +211,7 @@ object OriginalDbMapper {
                             speed = speed.coerceIn(0, 10),
                             tempC = tempC.coerceAtLeast(0),
                             reverse = reverse,
-                            accessory = if (text.lowercase().contains("fouet") && speed <= 4) Accessory.WHISK else Accessory.BLADE,
+                            accessory = if (McOnline.mentionsWhisk(text) && speed <= 4) Accessory.WHISK else Accessory.BLADE,
                             pulses = if (program == StepProgram.TURBO) maxOf(1, seconds) else 0,
                         )
                     }
