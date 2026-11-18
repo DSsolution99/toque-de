@@ -103,9 +103,18 @@ data class RecipeFilter(
  * pondéré (titre > catégorie/tags > ingrédients > étapes). Quelques millisecondes pour
  * des milliers de recettes, même sur la tablette d'origine.
  */
-class SearchIndex(recipes: List<Recipe>) {
+class SearchIndex private constructor(
+    val entries: List<Entry>,
+    private val vocabulary: Array<String>,
+    /** terme -> (index d'entrée -> poids) ; partagé entre les copies (voir [withFavorites]). */
+    private val postings: HashMap<String, HashMap<Int, Int>>,
+) {
+    /** Index de toutes les [recipes] (pour un gros catalogue, préférer [Builder] : une recette à la fois). */
+    constructor(recipes: List<Recipe>) : this(Builder().apply { recipes.forEach { add(it) } })
 
-    class Entry(
+    private constructor(b: Builder) : this(b.entries, b.vocabulary(), b.postings)
+
+    data class Entry(
         val id: String,
         val title: String,
         val category: String,
@@ -130,22 +139,17 @@ class SearchIndex(recipes: List<Recipe>) {
 
     data class Hit(val entry: Entry, val score: Double, val matched: Int)
 
-    val entries: List<Entry>
-    private val vocabulary: Array<String>
-    /** terme -> (index d'entrée -> poids) */
-    private val postings: HashMap<String, HashMap<Int, Int>> = HashMap()
+    /**
+     * Construction recette par recette : chaque recette (avec ses étapes) peut être libérée dès
+     * qu'elle est ajoutée, au lieu de garder tout le catalogue en mémoire (tablette de 1 Go).
+     */
+    class Builder {
+        internal val entries = ArrayList<Entry>()
+        internal val postings = HashMap<String, HashMap<Int, Int>>()
 
-    private companion object {
-        const val W_TITLE = 10
-        const val W_TAG = 5
-        const val W_INGREDIENT = 4
-        const val W_STEP = 1
-    }
-
-    init {
-        val list = ArrayList<Entry>(recipes.size)
-        for ((index, r) in recipes.withIndex()) {
-            list += Entry(r.id, r.title, r.category, r.tags, r.favorite, r.source, r.totalMinutes, r.image,
+        fun add(r: Recipe) {
+            val index = entries.size
+            entries += Entry(r.id, r.title, r.category, r.tags, r.favorite, r.source, r.totalMinutes, r.image,
                 r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount,
                 r.allCategories, r.nutrition?.kcal ?: 0, r.popularity, r.published,
                 if (RecipeFilter.isPortionUnit(r.servingUnit)) r.nutrition?.kcal ?: 0 else 0)
@@ -163,8 +167,29 @@ class SearchIndex(recipes: List<Recipe>) {
             for (i in r.allIngredients) add(i.name, W_INGREDIENT)
             for (s in r.steps) add(s.text, W_STEP)
         }
-        entries = list
-        vocabulary = postings.keys.toTypedArray().also { java.util.Arrays.sort(it) }
+
+        internal fun vocabulary(): Array<String> = postings.keys.toTypedArray().also { java.util.Arrays.sort(it) }
+
+        fun build(): SearchIndex = SearchIndex(this)
+    }
+
+    /**
+     * Même index avec d'autres favoris : seules les fiches dont l'étoile change sont recopiées, le
+     * vocabulaire et les listes de termes sont partagés. Rien n'est relu ni recalculé.
+     */
+    fun withFavorites(favorites: Set<String>): SearchIndex {
+        if (entries.none { it.favorite != (it.id in favorites) }) return this
+        return SearchIndex(entries.map { e ->
+            val f = e.id in favorites
+            if (e.favorite == f) e else e.copy(favorite = f)
+        }, vocabulary, postings)
+    }
+
+    private companion object {
+        const val W_TITLE = 10
+        const val W_TAG = 5
+        const val W_INGREDIENT = 4
+        const val W_STEP = 1
     }
 
     /** Catégories présentes, les plus fréquentes d'abord (à égalité, par ordre alphabétique). */

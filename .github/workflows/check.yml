@@ -18,6 +18,9 @@ jobs:
           java-version: 17
       - name: Tests and build
         run: ./gradlew --no-daemon :core:test :app:assembleDebug
+      - name: Performance
+        if: always()
+        run: grep -ho "PERF[^<]*" core/build/test-results/test/*.xml || true
       - name: Test report
         if: failure()
         run: |

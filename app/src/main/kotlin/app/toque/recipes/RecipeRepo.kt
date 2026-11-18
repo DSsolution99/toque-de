@@ -51,7 +51,8 @@ class RecipeRepo(private val context: Context) {
         val db = helper.readableDatabase
         val favs = HashSet<String>()
         db.rawQuery("SELECT id FROM favorites", null).use { c -> while (c.moveToNext()) favs += c.getString(0) }
-        val list = ArrayList<Recipe>()
+        // Une recette à la fois : elle est libérée dès qu'elle est dans l'index (tablette de 1 Go).
+        val builder = SearchIndex.Builder()
         db.rawQuery("SELECT json FROM recipes", null).use { c ->
             while (c.moveToNext()) {
                 val r = try {
@@ -59,14 +60,14 @@ class RecipeRepo(private val context: Context) {
                 } catch (_: Exception) {
                     null
                 } ?: continue
-                list += r.copy(favorite = r.id in favs)
+                builder.add(r.copy(favorite = r.id in favs))
             }
         }
         synchronized(favorites) {
             favorites.clear()
             favorites += favs
         }
-        index = SearchIndex(list)
+        index = builder.build()
         loaded = true
         notifyChanged()
     }
@@ -94,7 +95,9 @@ class RecipeRepo(private val context: Context) {
             val db = helper.writableDatabase
             if (favorite) db.execSQL("INSERT OR IGNORE INTO favorites (id) VALUES (?)", arrayOf(id))
             else db.execSQL("DELETE FROM favorites WHERE id = ?", arrayOf(id))
-            rebuild()
+            // Seule l'étoile change : pas besoin de relire tout le catalogue.
+            index = index.withFavorites(synchronized(favorites) { HashSet(favorites) })
+            notifyChanged()
         }
     }
 
