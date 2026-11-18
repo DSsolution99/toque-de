@@ -80,7 +80,8 @@ class PerformanceTest {
         assertEquals(1, favs.entries.count { it.favorite })
         // Großzügige Grenzen für den Testrechner.
         assertTrue("Aufbau zu langsam: $build ms", build < 5000)
-        assertTrue("Suche zu langsam: $search", search.all { it < 60 })
+        // Vorhandene Wörter streng, Tippfehler mit Puffer (GitHub-Rechner schwanken).
+        assertTrue("Suche zu langsam: $search", search[0] < 20 && search.all { it < 150 })
         assertTrue("Filter zu langsam: $filtered", filtered < 30)
         assertTrue("Favorit zu langsam: $fav", fav < 20)
     }

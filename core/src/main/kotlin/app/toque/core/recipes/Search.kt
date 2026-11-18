@@ -233,7 +233,9 @@ class SearchIndex private constructor(
             for (len in maxOf(1, token.length - max)..minOf(MAX_LEN, token.length + max)) {
                 for (t in byLength[len]) {
                     if (c.containsKey(t)) continue
-                    if (t[0] != token[0] && token.length < 6) continue
+                    // Courts : même première lettre. Longs : première ou deuxième lettre commune
+                    // (une faute touche rarement les deux), ce qui écarte la plupart des mots.
+                    if (t[0] != token[0] && (token.length < 6 || t[1] != token[1])) continue
                     val d = TextNorm.distance(token, t, max)
                     if (d <= max) c[t] = if (d == 1) 0.55 else 0.35
                 }
