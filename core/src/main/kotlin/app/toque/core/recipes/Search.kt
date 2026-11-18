@@ -108,11 +108,13 @@ class SearchIndex private constructor(
     private val vocabulary: Array<String>,
     /** terme -> (index d'entrée -> poids) ; partagé entre les copies (voir [withFavorites]). */
     private val postings: HashMap<String, HashMap<Int, Int>>,
+    /** Vocabulaire rangé par longueur : la tolérance aux fautes ne compare que des mots de longueur voisine. */
+    private val byLength: Array<Array<String>>,
 ) {
     /** Index de toutes les [recipes] (pour un gros catalogue, préférer [Builder] : une recette à la fois). */
     constructor(recipes: List<Recipe>) : this(Builder().apply { recipes.forEach { add(it) } })
 
-    private constructor(b: Builder) : this(b.entries, b.vocabulary(), b.postings)
+    private constructor(b: Builder) : this(b.entries, b.vocabulary, b.postings, lengthBuckets(b.vocabulary))
 
     data class Entry(
         val id: String,
@@ -168,7 +170,7 @@ class SearchIndex private constructor(
             for (s in r.steps) add(s.text, W_STEP)
         }
 
-        internal fun vocabulary(): Array<String> = postings.keys.toTypedArray().also { java.util.Arrays.sort(it) }
+        internal val vocabulary: Array<String> by lazy { postings.keys.toTypedArray().also { java.util.Arrays.sort(it) } }
 
         fun build(): SearchIndex = SearchIndex(this)
     }
@@ -182,7 +184,7 @@ class SearchIndex private constructor(
         return SearchIndex(entries.map { e ->
             val f = e.id in favorites
             if (e.favorite == f) e else e.copy(favorite = f)
-        }, vocabulary, postings)
+        }, vocabulary, postings, byLength)
     }
 
     private companion object {
@@ -190,6 +192,13 @@ class SearchIndex private constructor(
         const val W_TAG = 5
         const val W_INGREDIENT = 4
         const val W_STEP = 1
+        const val MAX_LEN = 48
+
+        fun lengthBuckets(vocabulary: Array<String>): Array<Array<String>> {
+            val lists = Array(MAX_LEN + 1) { ArrayList<String>() }
+            for (t in vocabulary) lists[minOf(t.length, MAX_LEN)] += t
+            return Array(MAX_LEN + 1) { lists[it].toTypedArray() }
+        }
     }
 
     /** Catégories présentes, les plus fréquentes d'abord (à égalité, par ordre alphabétique). */
@@ -217,14 +226,17 @@ class SearchIndex private constructor(
         val c = HashMap<String, Double>()
         if (postings.containsKey(token)) c[token] = 1.0
         if (token.length >= 2) for (t in prefixMatches(token)) if (t != token) c[t] = maxOf(c[t] ?: 0.0, 0.75)
-        if (token.length >= 4) {
+        // Fautes de frappe : seulement si le mot n'existe pas tel quel (sinon c'est lui qui est cherché),
+        // et seulement parmi les mots de longueur voisine.
+        if (token.length >= 4 && !postings.containsKey(token)) {
             val max = if (token.length >= 8) 2 else 1
-            for (t in vocabulary) {
-                if (c.containsKey(t)) continue
-                if (kotlin.math.abs(t.length - token.length) > max) continue
-                if (t[0] != token[0] && token.length < 6) continue
-                val d = TextNorm.distance(token, t, max)
-                if (d <= max) c[t] = if (d == 1) 0.55 else 0.35
+            for (len in maxOf(1, token.length - max)..minOf(MAX_LEN, token.length + max)) {
+                for (t in byLength[len]) {
+                    if (c.containsKey(t)) continue
+                    if (t[0] != token[0] && token.length < 6) continue
+                    val d = TextNorm.distance(token, t, max)
+                    if (d <= max) c[t] = if (d == 1) 0.55 else 0.35
+                }
             }
         }
         return c
