@@ -157,7 +157,9 @@ function renderDetail() {
   if (r.nutrition) {
     const n = r.nutrition;
     const per = r.servings > 0 && r.servingUnit ? T("perOf", r.servings, r.servingUnit) : T("perServing");
-    html += `<div class="meta">${esc(T("nutrition", n.kcal, num(n.carbsG), num(n.fatG), num(n.proteinG)))} (${esc(per)})</div>`;
+    // Eigene Rezepte geben oft nur die Kalorien an: dann keine „0 g“ für den Rest.
+    const line = n.carbsG || n.fatG || n.proteinG ? T("nutrition", n.kcal, num(n.carbsG), num(n.fatG), num(n.proteinG)) : n.kcal + " kcal";
+    html += `<div class="meta">${esc(line)} (${esc(per)})</div>`;
   }
   html += `<div class="actions">
     <button class="btn primary" id="open">▶ ${esc(T("openOnDevice"))}</button>
