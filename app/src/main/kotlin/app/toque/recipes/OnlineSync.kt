@@ -38,13 +38,17 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
 
     fun sync(progress: (String) -> Unit = {}): LidlSync.Report {
         if (!running.compareAndSet(false, true)) return LidlSync.Report(false, tr("Synchronisation déjà en cours"))
+        // L'avancement est aussi publié pour tout écran ouvert plus tard (Réglages quittés puis rouverts).
+        val publish: (String) -> Unit = { msg -> report(msg); progress(msg) }
         try {
-            return finish(run(progress))
+            report(tr("Synchronisation en cours… (quelques minutes)"))
+            return finish(run(publish))
         } catch (e: Exception) {
             log.crash("synchro", e)
             return finish(LidlSync.Report(false, tr("Synchronisation impossible : %s", e.message ?: e.toString())))
         } finally {
             running.set(false)
+            report(null)
         }
     }
 
@@ -267,5 +271,23 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
     companion object {
         private const val MAX_WIDTH = 800
         private val running = AtomicBoolean(false)
+        private val observers = java.util.concurrent.CopyOnWriteArrayList<(String?) -> Unit>()
+
+        /** Dernier message d'avancement de la synchro en cours, null si aucune ne tourne. */
+        @Volatile var current: String? = null
+            private set
+
+        val isRunning: Boolean get() = running.get()
+
+        /** Suit l'avancement (null : synchro terminée) ; renvoie de quoi arrêter de suivre. */
+        fun observe(l: (String?) -> Unit): () -> Unit {
+            observers += l
+            return { observers -= l }
+        }
+
+        private fun report(msg: String?) {
+            current = msg
+            for (o in observers) o(msg)
+        }
     }
 }

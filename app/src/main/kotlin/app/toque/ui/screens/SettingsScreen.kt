@@ -379,6 +379,10 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
 
     private fun sync(online: Boolean) {
         if (syncing) return
+        if (online && OnlineSync.isRunning) {
+            syncText.text = OnlineSync.current ?: tr("Synchronisation déjà en cours")
+            return
+        }
         if (!online && a.prefs.mode != Prefs.Mode.HARDWARE) {
             a.toast(tr("Disponible une fois Toque installé sur le robot (mode Machine réelle)"), Ui.WARN)
             return
@@ -386,7 +390,8 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         syncing = true
         syncText.text = tr("Synchronisation en cours… (quelques minutes)")
         Thread {
-            val r = if (online) OnlineSync(a, a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
+            // L'avancement de la synchro en ligne arrive par [OnlineSync.observe] (voir onShow).
+            val r = if (online) OnlineSync(a, a.prefs, a.app.recipes, a.app.log).sync()
             else LidlSync(a, a.prefs, a.app.recipes, a.app.log).importNow { msg -> view.post { syncText.text = msg } }
             view.post {
                 syncing = false
@@ -527,10 +532,21 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         a.toast(message, Ui.WARN)
     }
 
+    private var unsubSync: (() -> Unit)? = null
+
+    override fun onHide() {
+        unsubSync?.invoke()
+        unsubSync = null
+    }
+
     override fun onShow() {
+        unsubSync?.invoke()
+        unsubSync = OnlineSync.observe { msg -> view.post { if (msg != null) syncText.text = msg else if (!syncing) refreshSync() } }
         mode = a.prefs.mode
         renderModes()
         if (!syncing) refreshSync()
+        // Synchro lancée avant d'ouvrir cet écran (ou la nuit) : on reprend son avancement.
+        OnlineSync.current?.let { syncText.text = it }
     }
 
     override fun onSnapshot(s: Snapshot) {
