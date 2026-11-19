@@ -306,6 +306,24 @@ Home-Bildschirm“ hinzufügen, dann wirkt sie wie eine App).
 Die Weboberfläche ist nur im Heimnetz erreichbar und kann in den Einstellungen ausgeschaltet
 werden. Sie kann nichts starten, nur anzeigen, Rezepte öffnen und die Liste ändern.
 
+### Eigene Rezepte mit Claude
+
+Jedes Rezept (Link, Text, Foto aus dem Kochbuch, Thermomix-Rezept oder nur eine Idee) lässt sich
+ins Gerät holen. Die Umwandlung macht ein Assistent wie Claude, das Gerät prüft und speichert nur.
+
+**Am Handy:** Reiter **+** öffnen › **Anleitung kopieren** › in der Claude-App einfügen und dein
+Rezept dazugeben › Claudes Antwort kopieren › im Feld einfügen › **Prüfen und speichern**.
+
+**Am Mac mit Claude:** z. B. „Hol mir dieses Rezept auf meinen Monsieur Cuisine: <Link>. Die
+Adresse des Geräts ist 192.168.178.42.“ Claude schreibt das Rezept und schickt es mit
+`tools/send-recipe.sh`.
+
+- Eigene Rezepte findest du über den Filter **Meine Rezepte** (Gerät und Handy) und kannst sie am
+  Handy löschen. Der Lidl-Abgleich lässt sie in Ruhe.
+- Jede Geräte-Einstellung aus einem eigenen Rezept musst du am Gerät **bestätigen**, bevor sie
+  läuft. Einstellungen außerhalb der Gerätegrenzen werden angezeigt und bleiben gesperrt.
+- Während ein Programm läuft, nimmt das Gerät keine Rezepte an.
+
 ### Im Alltag
 
 - Toque öffnet sich beim Einschalten von selbst.

@@ -56,6 +56,23 @@ object WebTexts {
         "back" to trKey("Revenir"),
         "loading" to trKey("Chargement…"),
         "notes" to trKey("Remarques"),
+        "mine" to trKey("Mes recettes"),
+        "addRecipe" to trKey("Ajouter une recette"),
+        "addHelp" to trKey("Faites convertir la recette par un assistant comme Claude : copiez le mode d'emploi, envoyez-le avec votre recette (texte, lien ou photo), puis collez la réponse ici."),
+        "copyPrompt" to trKey("Copier le mode d'emploi"),
+        "copied" to trKey("Mode d'emploi copié"),
+        "copyManual" to trKey("Copie automatique impossible : sélectionnez le texte ci-dessous et copiez-le."),
+        "pasteHere" to trKey("Collez ici la recette au format Toque (JSON)"),
+        "importSave" to trKey("Vérifier et enregistrer"),
+        "importedOne" to trKey("1 recette enregistrée"),
+        "importedN" to trKey("%d recettes enregistrées"),
+        "importWarnings" to trKey("À vérifier"),
+        "importErrors" to trKey("Non enregistré"),
+        "delete" to trKey("Supprimer"),
+        "deleteConfirm" to trKey("Supprimer cette recette personnelle ?"),
+        "deleted" to trKey("Recette supprimée"),
+        "reviewOnDevice" to trKey("à confirmer sur le robot"),
+        "ownRecipe" to trKey("Recette personnelle"),
     )
 
     fun all(): Map<String, String> = KEYS.mapValues { tr(it.value) }

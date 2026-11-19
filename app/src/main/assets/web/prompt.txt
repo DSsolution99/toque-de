@@ -1,0 +1,50 @@
+Turn the recipe I give you (text, link, photo or idea) into a Toque recipe for the Monsieur Cuisine Connect.
+Answer with ONE JSON code block only, no other text. Write all recipe texts in the language I write to you in.
+
+Format (one recipe object; a list [ ... ] of up to 50 recipes is also fine):
+{
+  "title": "Kürbissuppe",
+  "category": "Suppen",
+  "categories": ["Suppen", "Vegetarisch"],
+  "servings": 4,
+  "prepMinutes": 10,
+  "totalMinutes": 35,
+  "difficulty": 1,
+  "author": "",
+  "url": "https://… (source page, https only, optional)",
+  "nutrition": {"kcal": 210, "carbsG": 24, "fatG": 9, "proteinG": 5},
+  "notes": "Tips, storage, variations",
+  "ingredients": [
+    {"group": "", "items": [
+      {"qty": "800", "unit": "g", "name": "Hokkaido-Kürbis", "note": "entkernt", "aisle": "Gemüse"},
+      {"qty": "1", "unit": "", "name": "Zwiebel", "aisle": "Gemüse"},
+      {"qty": "", "unit": "", "name": "Salz"}
+    ]}
+  ],
+  "steps": [
+    {"text": "Zwiebel in den Mixbehälter geben und zerkleinern.",
+     "machine": {"program": "manuel", "seconds": 5, "speed": 5}},
+    {"text": "Öl zugeben und andünsten.",
+     "machine": {"program": "manuel", "seconds": 180, "speed": 1, "tempC": 120}},
+    {"text": "Kürbis zugeben.", "weigh": {"label": "Kürbis", "grams": 800}},
+    {"text": "Brühe zugeben und garen.",
+     "machine": {"program": "manuel", "seconds": 1200, "speed": 1, "tempC": 100, "reverse": true}},
+    {"text": "Abschmecken und servieren."}
+  ]
+}
+
+Rules:
+- qty is text: "200", "1,5", "1/2", "2-3" or "" (amount scales with servings). Units: g, kg, ml, l, EL, TL, Prise, Stück …
+- nutrition is per serving and optional; leave it out if you cannot estimate it reasonably.
+- difficulty: 1 easy, 2 medium, 3 hard.
+- A step without "machine" is a plain instruction. "weigh" asks the device scale for that many grams.
+- machine.program: "manuel" (default), "petrir" (knead, max 120 s), "vapeur" (steam), "rissoler" (sauté, max 840 s), "turbo" (pulses).
+- manuel: speed 1–10, seconds 1–5940 (speed above 6: max 900 s).
+  tempC only from: 37, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130 (omit for no heat).
+  When heating, speed 3 at most. "reverse": true (gentle stirring, Linkslauf) allows speed 3 at most.
+  "accessory": "whisk" (Rühraufsatz) allows speed 4 at most; default is the blade.
+- turbo: {"program": "turbo", "pulses": 3}; never with the whisk.
+- Prefer the device's typical settings (chop 5 s / speed 5, sauté 3 min / 120 °C / speed 1, cook with reverse speed 1).
+- Do not invent images. Keep the original source link in "url" when there is one.
+
+Every device setting must be confirmed on the device before it runs; nothing starts by itself.

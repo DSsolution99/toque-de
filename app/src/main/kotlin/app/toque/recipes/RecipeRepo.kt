@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import app.toque.core.recipes.Recipe
 import app.toque.core.recipes.RecipeCodec
+import app.toque.core.recipes.RecipeImport
 import app.toque.core.recipes.RecipeSource
 import app.toque.core.recipes.SearchIndex
 import java.io.File
@@ -113,7 +114,8 @@ class RecipeRepo(private val context: Context) {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
-            db.delete("recipes", null, null)
+            // Les recettes personnelles ne viennent pas de l'appli d'origine : elles restent.
+            db.delete("recipes", "id NOT LIKE ?", arrayOf(RecipeImport.ID_PREFIX + "%"))
             val now = System.currentTimeMillis()
             for (r in recipes) {
                 val v = ContentValues()
@@ -166,7 +168,7 @@ class RecipeRepo(private val context: Context) {
         exec.submit {
             val db = helper.writableDatabase
             val gone = ArrayList<String>()
-            db.rawQuery("SELECT id FROM recipes", null).use { c -> while (c.moveToNext()) c.getString(0).let { if (it !in keep) gone += it } }
+            db.rawQuery("SELECT id FROM recipes", null).use { c -> while (c.moveToNext()) c.getString(0).let { if (it !in keep && !RecipeImport.isOwn(it)) gone += it } }
             db.beginTransaction()
             try {
                 for (id in gone) db.delete("recipes", "id = ?", arrayOf(id))
@@ -175,6 +177,19 @@ class RecipeRepo(private val context: Context) {
                 db.endTransaction()
             }
             if (rebuild) rebuild()
+        }.get()
+    }
+
+    /** Supprime une recette personnelle (les recettes Lidl suivent la synchro). */
+    fun deleteOwn(id: String): Boolean {
+        if (!RecipeImport.isOwn(id)) return false
+        return exec.submit<Boolean> {
+            val db = helper.writableDatabase
+            val n = db.delete("recipes", "id = ?", arrayOf(id))
+            db.delete("favorites", "id = ?", arrayOf(id))
+            synchronized(favorites) { favorites -= id }
+            if (n > 0) rebuild()
+            n > 0
         }.get()
     }
 

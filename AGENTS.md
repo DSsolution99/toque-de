@@ -215,6 +215,12 @@ and without macFUSE the FUSE package stops mtkclient from starting
 - Phone: Toque › Settings › Phone (web interface) shows the address to open on a phone on the same
   Wi-Fi (`http://<robot IP>:8080`). Tell the person; it can be turned off there.
 - Recipes: Settings › Lidl recipes › Sync (monsieur-cuisine.com, no account). Nightly re-sync.
+- Own recipes: the person can ask you to add recipes (from a link, text, photo or idea). Write them
+  in the format described in `app/src/main/assets/web/prompt.txt` (follow its machine limits; write
+  the texts in the person's language), save them to a `.json` file, and send them with
+  `tools/send-recipe.sh <file> <robot IP>` (the IP is in Toque › Settings › Phone). Show the
+  answer's `warnings` to the person. Nothing runs by itself: each machine step is confirmed on the
+  robot. On the phone, the **+** tab does the same with a pasted answer.
 - Clock: set automatically (time zone from the Internet connection); Settings › Date and time.
 - To work on the robot later over Wi-Fi: `adb connect <robot IP>:5555`.
 - German interface and recipes: built into this version (toque-de). If Android on the robot is not in

@@ -9,6 +9,8 @@ import app.toque.core.json.obj
 import app.toque.core.json.str
 import app.toque.core.net.LocalNetwork
 import app.toque.core.recipes.RecipeFilter
+import app.toque.core.recipes.RecipeImport
+import app.toque.core.recipes.RecipeSource
 import app.toque.core.recipes.RecipeSort
 import app.toque.core.recipes.WebViews
 import app.toque.ui.MainActivity
@@ -33,6 +35,7 @@ import java.util.concurrent.Executors
  * Sécurité : rien ne démarre le moteur ni la chauffe ; une recette ne s'ouvre pas pendant un
  * programme. Seules les adresses du réseau local sont servies, et toute modification exige
  * l'en-tête « X-Toque » (une page web étrangère ne peut pas l'envoyer sans autorisation).
+ * Les recettes importées ([RecipeImport]) ont des réglages machine à confirmer sur le robot.
  */
 class WebServer(private val app: ToqueApp) {
     @Volatile private var socket: ServerSocket? = null
@@ -115,7 +118,7 @@ class WebServer(private val app: ToqueApp) {
             if (i > 0) headers[l.substring(0, i).trim().lowercase()] = l.substring(i + 1).trim()
         }
         val length = headers["content-length"]?.toIntOrNull() ?: 0
-        if (length > 64 * 1024) return null
+        if (length > MAX_BODY) return null
         val body = ByteArray(length)
         var n = 0
         while (n < length) {
@@ -134,7 +137,7 @@ class WebServer(private val app: ToqueApp) {
     }
 
     private fun write(out: OutputStream, r: Response) {
-        val reason = when (r.status) { 200 -> "OK"; 404 -> "Not Found"; 403 -> "Forbidden"; 409 -> "Conflict"; else -> "Status" }
+        val reason = when (r.status) { 200 -> "OK"; 400 -> "Bad Request"; 404 -> "Not Found"; 403 -> "Forbidden"; 409 -> "Conflict"; else -> "Status" }
         val head = StringBuilder()
             .append("HTTP/1.1 ").append(r.status).append(' ').append(reason).append("\r\n")
             .append("Content-Type: ").append(r.type).append("\r\n")
@@ -157,6 +160,7 @@ class WebServer(private val app: ToqueApp) {
         val write = req.method == "POST"
         if (write && req.headers["x-toque"] != "1") return text(403, "missing X-Toque header")
         if (!write && req.method != "GET") return text(405, "method not allowed")
+        if (write && req.path == "/api/import") return importRecipes(req.body)
         val body: Map<String, Any?> = if (write && req.body.isNotEmpty())
             (try { Json.parse(String(req.body, Charsets.UTF_8)) } catch (_: Exception) { null }).obj() else emptyMap()
         return when {
@@ -169,6 +173,7 @@ class WebServer(private val app: ToqueApp) {
             req.path == "/api/categories" -> ok(app.recipes.index.categories)
             req.path == "/api/filters" -> ok(linkedMapOf("kcal" to RecipeFilter.KCAL_LEVELS, "sorts" to RecipeSort.values().map { it.name }))
             req.path == "/api/recipes" -> recipes(req.query)
+            req.path == "/api/prompt" -> asset("web/prompt.txt", "text/plain; charset=utf-8")
             req.path == "/api/recipe" -> recipe(req.query["id"].orEmpty(), req.query["servings"]?.toIntOrNull() ?: 0)
             req.path == "/api/shopping" && !write -> shopping()
             !write -> text(404, "not found")
@@ -178,6 +183,12 @@ class WebServer(private val app: ToqueApp) {
                 if (app.recipes.get(id) == null) return text(404, "unknown recipe")
                 app.recipes.setFavorite(id, body["on"] == true)
                 ok(mapOf("favorite" to (body["on"] == true)))
+            }
+            req.path == "/api/delete" -> {
+                val id = body.str("id").orEmpty()
+                if (!RecipeImport.isOwn(id)) return text(403, "only own recipes can be deleted")
+                if (!app.recipes.deleteOwn(id)) return text(404, "unknown recipe")
+                ok(mapOf("deleted" to id))
             }
             req.path == "/api/shopping/add" -> {
                 val r = app.recipes.get(body.str("id").orEmpty()) ?: return text(404, "unknown recipe")
@@ -215,6 +226,7 @@ class WebServer(private val app: ToqueApp) {
             favoritesOnly = q["favorites"] == "1",
             maxMinutes = q["minutes"]?.toIntOrNull() ?: 0,
             maxKcal = q["kcal"]?.toIntOrNull() ?: 0,
+            source = if (q["mine"] == "1") RecipeSource.USER else null,
             sort = sort,
         )
         val query = q["q"].orEmpty()
@@ -234,6 +246,24 @@ class WebServer(private val app: ToqueApp) {
     private fun shopping(): Response =
         ok(app.shopping.read { WebViews.shopping(it, app.shopping.version) })
 
+    /**
+     * Range des recettes personnelles (format « toque-recettes-1 »). Refusé pendant un programme :
+     * la reconstruction de l'index ne doit pas ralentir la tablette en pleine cuisson.
+     */
+    private fun importRecipes(raw: ByteArray): Response {
+        if (app.machine.snapshot.busy) return json(409, mapOf("error" to "busy"))
+        val res = RecipeImport.parse(String(raw, Charsets.UTF_8))
+        if (res.recipes.isNotEmpty()) {
+            app.recipes.upsertAll(res.recipes)
+            app.log.write("web", "${res.recipes.size} recette(s) perso importée(s)")
+        }
+        return json(if (res.recipes.isEmpty()) 400 else 200, linkedMapOf(
+            "imported" to res.recipes.map { linkedMapOf("id" to it.id, "title" to it.title) },
+            "warnings" to res.warnings,
+            "errors" to res.errors,
+        ))
+    }
+
     /** Ouvre la recette sur l'écran du robot, sauf pendant un programme ou dans l'appli d'origine. */
     private fun open(id: String, servings: Int): Response {
         if (app.recipes.get(id) == null) return text(404, "unknown recipe")
@@ -249,6 +279,8 @@ class WebServer(private val app: ToqueApp) {
 
     companion object {
         const val PORT = 8080
+        /** Corps de requête maximal (un envoi de recettes reste bien en dessous). */
+        const val MAX_BODY = 512 * 1024
 
         /** Adresse du réseau de la maison (voir [LocalNetwork]). */
         fun isLocal(a: InetAddress?): Boolean = LocalNetwork.isLocal(a)

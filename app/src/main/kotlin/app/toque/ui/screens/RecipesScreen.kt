@@ -25,6 +25,7 @@ import app.toque.core.i18n.tr
 import app.toque.core.recipes.RecipeDates
 import app.toque.core.recipes.RecipeFilter
 import app.toque.core.recipes.RecipeSort
+import app.toque.core.recipes.RecipeSource
 import app.toque.core.recipes.SearchIndex
 import app.toque.ui.Icon
 import app.toque.ui.ImageLoader
@@ -148,6 +149,9 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         // Le palier de calories reste quand on choisit une catégorie (« Vegan » + « 400 kcal max »).
         val base = reset.copy(maxKcal = filter.maxKcal)
         chip(tr("Favoris"), filter.favoritesOnly, base.copy(favoritesOnly = true))
+        // Recettes personnelles (importées par le téléphone) : la puce n'apparaît que s'il y en a.
+        if (a.app.recipes.index.entries.any { it.source == RecipeSource.USER })
+            chip(tr("Mes recettes"), filter.source == RecipeSource.USER, base.copy(source = RecipeSource.USER))
         chip(tr("30 min max"), filter.maxMinutes == 30, base.copy(maxMinutes = 30))
         // Calories : une touche passe au palier suivant (200 → 300 → … → 800 → sans limite).
         val levels = RecipeFilter.KCAL_LEVELS

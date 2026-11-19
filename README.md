@@ -49,6 +49,15 @@ Compared with the original Toque:
   read them with servings and nutrition, **open a recipe on the robot's screen**, manage favourites
   and the shopping list, and see the running program (time left, temperature). Nothing can be
   started from the phone, and nothing opens while a program runs. Home network only.
+- **Your own recipes, written by an assistant.** The phone page has a **+** tab: copy the
+  instructions, send them with any recipe (text, link, cookbook photo, an idea) to an assistant
+  like Claude, and paste the answer back. The robot only checks and stores the finished recipe
+  (format `toque-recettes-1`, guide in [`app/src/main/assets/web/prompt.txt`](app/src/main/assets/web/prompt.txt)),
+  so it costs almost nothing on the device. From a computer: `tools/send-recipe.sh recipe.json <robot IP>`.
+  Own recipes get a *My recipes* filter, can be deleted from the phone, and are never removed by
+  the Lidl sync. Every imported machine setting must be confirmed on the robot before it runs;
+  settings outside the machine limits are flagged and stay blocked. Imports are refused while a
+  program runs.
 - **Own releases.** Updates (*Settings › Updates*) and the install script use the releases of
   [DSsolution99/toque-de](https://github.com/DSsolution99/toque-de/releases). The APK is signed
   with the same public project key as the original, so it installs over an existing Toque.

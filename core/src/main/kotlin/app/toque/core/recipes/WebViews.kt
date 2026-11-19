@@ -26,6 +26,7 @@ object WebViews {
         "category" to e.category,
         "isNew" to RecipeDates.isNew(e.published),
         "favorite" to favorite,
+        "own" to (e.source == RecipeSource.USER),
     )
 
     /** Fiche complète pour [servings] portions (0 : celles de la recette). */
@@ -52,6 +53,7 @@ object WebViews {
             },
             "url" to r.url,
             "favorite" to favorite,
+            "own" to (r.source == RecipeSource.USER),
             "notes" to r.notes,
             "ingredients" to r.ingredients.map { g ->
                 linkedMapOf("group" to g.title, "items" to g.items.map { it.scaled(factor).display })
@@ -62,6 +64,7 @@ object WebViews {
                     "machine" to s.machine?.summary,
                     "valid" to (s.machine?.valid ?: true),
                     "weigh" to s.weigh?.grams,
+                    "review" to (s.machine != null && s.needsReview),
                 )
             },
         )

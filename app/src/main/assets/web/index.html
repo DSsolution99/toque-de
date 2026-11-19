@@ -15,6 +15,7 @@
   <nav class="tabs">
     <button data-tab="recipes" class="tab on" id="tabRecipes"></button>
     <button data-tab="shopping" class="tab" id="tabShopping"></button>
+    <button data-tab="add" class="tab" id="tabAdd">+</button>
   </nav>
 </header>
 <div id="status" class="status" hidden></div>
@@ -28,6 +29,15 @@
   </section>
   <section id="detail" hidden></section>
   <section id="shopping" hidden></section>
+  <section id="add" hidden>
+    <p class="help" id="addHelp"></p>
+    <div class="actions"><button class="btn" id="copyPrompt"></button></div>
+    <p class="note" id="copyManual" hidden></p>
+    <textarea id="promptText" class="paste small" readonly hidden></textarea>
+    <textarea id="paste" class="paste" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <div class="actions"><button class="btn primary" id="importSave"></button></div>
+    <div id="importResult"></div>
+  </section>
 </main>
 <div id="toast" class="toast" hidden></div>
 <script src="/app.js"></script>

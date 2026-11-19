@@ -39,6 +39,7 @@ const state = {
   q: "",
   sort: "RELEVANCE",
   favorites: false,
+  mine: false,
   minutes: 0,
   kcal: 0,
   category: "",
@@ -60,6 +61,7 @@ function renderChips() {
     sorts.map(([v, k]) => `<option value="${v}"${state.sort === v ? " selected" : ""}>⇅ ${esc(T(k))}</option>`).join("") +
     `</select>` +
     `<button class="chip${state.favorites ? " on" : ""}" data-f="favorites">★ ${esc(T("favorites"))}</button>` +
+    `<button class="chip${state.mine ? " on" : ""}" data-f="mine">✎ ${esc(T("mine"))}</button>` +
     `<button class="chip${state.minutes ? " on" : ""}" data-f="minutes">${esc(T("minutes30"))}</button>` +
     `<select class="chip${state.kcal ? " on" : ""}" id="kcal" title="${esc(T("kcalHint"))}"><option value="0">${esc(T("calories"))}</option>` +
     state.kcalLevels.map((k) => `<option value="${k}"${state.kcal === k ? " selected" : ""}>${esc(T("kcal500", k))}</option>`).join("") +
@@ -73,6 +75,7 @@ function renderChips() {
   c.querySelectorAll("button[data-f]").forEach((b) => (b.onclick = () => {
     const f = b.dataset.f;
     if (f === "favorites") state.favorites = !state.favorites;
+    if (f === "mine") state.mine = !state.mine;
     if (f === "minutes") state.minutes = state.minutes ? 0 : 30;
     reload();
   }));
@@ -81,6 +84,7 @@ function renderChips() {
 function query() {
   const p = new URLSearchParams({ q: state.q, sort: state.sort, offset: state.offset, limit: 40 });
   if (state.favorites) p.set("favorites", "1");
+  if (state.mine) p.set("mine", "1");
   if (state.minutes) p.set("minutes", state.minutes);
   if (state.kcal) p.set("kcal", state.kcal);
   if (state.category) p.set("category", state.category);
@@ -90,6 +94,7 @@ function query() {
 function card(r) {
   const meta = [];
   if (r.isNew) meta.push(`<span class="new">${esc(T("isNew"))}</span>`);
+  if (r.own) meta.push("✎");
   if (r.ratingCount > 0) meta.push("★ " + num(r.rating));
   if (r.minutes > 0) meta.push(r.minutes + " min");
   if (r.kcal > 0) meta.push(r.kcal + " kcal");
@@ -145,6 +150,7 @@ function renderDetail() {
   meta.push(diff);
   if (r.ratingCount > 0) meta.push(`★ ${num(r.rating)} (${r.ratingCount})`);
   if (r.author) meta.push(T("by", /official/i.test(r.author) ? T("official") : r.author));
+  if (r.own) meta.push(T("ownRecipe"));
   let html = `<div class="detail">`;
   if (r.image) html += `<div class="hero" style="background-image:url('${esc(r.image)}')"></div>`;
   html += `<h2>${esc(r.title)}</h2><div class="meta">${meta.map(esc).join(" · ")}</div>`;
@@ -157,6 +163,7 @@ function renderDetail() {
     <button class="btn primary" id="open">▶ ${esc(T("openOnDevice"))}</button>
     <button class="btn" id="shop">+ ${esc(T("addShopping"))}</button>
     <button class="btn" id="fav">${r.favorite ? "★" : "☆"} ${esc(T("favorite"))}</button>
+    ${r.own ? `<button class="btn" id="del">✕ ${esc(T("delete"))}</button>` : ""}
     ${r.url ? `<a class="btn" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(T("website"))}</a>` : ""}
   </div>`;
   html += `<div class="box"><h3><span>${esc(T("ingredients"))}</span>`;
@@ -174,7 +181,7 @@ function renderDetail() {
   for (const s of r.steps) {
     html += `<li>${esc(s.text)}`;
     if (s.weigh) html += ` <span class="tag">⚖ ${esc(T("weigh", s.weigh))}</span>`;
-    if (s.machine) html += ` <span class="tag${s.valid ? "" : " warn"}">${esc(s.machine)}</span>`;
+    if (s.machine) html += ` <span class="tag${s.valid ? "" : " warn"}">${esc(s.machine)}${s.review ? " · ✋ " + esc(T("reviewOnDevice")) : ""}</span>`;
     html += `</li>`;
   }
   html += `</ol></div>`;
@@ -198,6 +205,15 @@ function renderDetail() {
     try {
       renderShopping(await post("/api/shopping/add", { id: r.id, servings: r.wanted }));
       toast(T("added", r.ingredients.reduce((n, g) => n + g.items.length, 0)));
+    } catch (e) { toast(T("offline")); }
+  };
+  if ($("del")) $("del").onclick = async () => {
+    if (!confirm(T("deleteConfirm"))) return;
+    try {
+      await post("/api/delete", { id: r.id });
+      toast(T("deleted"));
+      history.back();
+      reload();
     } catch (e) { toast(T("offline")); }
   };
   $("fav").onclick = async () => {
@@ -247,6 +263,65 @@ function renderShopping(data) {
   };
 }
 
+// ------------------------------------------------------------------ Eigenes Rezept
+
+async function copyPrompt() {
+  let text = "";
+  try {
+    text = await (await fetch("/api/prompt", { cache: "no-store" })).text();
+  } catch (e) { toast(T("offline")); return; }
+  // Im Heimnetz (http) gibt es oft keine Zwischenablage-API: dann markiertes Textfeld als Ersatz.
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(T("copied"));
+    return;
+  } catch (e) {}
+  const box = $("promptText");
+  box.value = text;
+  box.hidden = false;
+  box.focus();
+  box.select();
+  box.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  if (ok) toast(T("copied"));
+  else $("copyManual").hidden = false;
+}
+
+function list(items) {
+  return `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>`;
+}
+
+async function importRecipes() {
+  const text = $("paste").value.trim();
+  if (!text) return;
+  const btn = $("importSave");
+  btn.disabled = true;
+  let data;
+  try {
+    const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json", "X-Toque": "1" }, body: text });
+    data = await r.json().catch(() => ({}));
+    if (r.status === 409) { toast(T("busy")); return; }
+    if (!r.ok && !data.errors) throw new Error("HTTP " + r.status);
+  } catch (e) {
+    toast(T("offline"));
+    return;
+  } finally {
+    btn.disabled = false;
+  }
+  let html = "";
+  const n = (data.imported || []).length;
+  if (n) {
+    html += `<div class="result"><h4>✓ ${esc(n === 1 ? T("importedOne") : T("importedN", n))}</h4>` +
+      list(data.imported.map((r) => `<a href="#r=${encodeURIComponent(r.id)}">${esc(r.title)}</a>`)) + `</div>`;
+    $("paste").value = "";
+  }
+  if ((data.warnings || []).length) html += `<div class="result warn"><h4>${esc(T("importWarnings"))}</h4>${list(data.warnings.map(esc))}</div>`;
+  if ((data.errors || []).length) html += `<div class="result warn"><h4>${esc(T("importErrors"))}</h4>${list(data.errors.map(esc))}</div>`;
+  $("importResult").innerHTML = html;
+  if (n) { state.mine = true; reload(); }
+}
+
 // ------------------------------------------------------------------ Status des Geräts
 
 function clock(ms) {
@@ -275,11 +350,12 @@ async function pollStatus() {
 // ------------------------------------------------------------------ Navigation
 
 function show(view) {
-  for (const v of ["recipes", "detail", "shopping"]) $(v).hidden = v !== view;
+  for (const v of ["recipes", "detail", "shopping", "add"]) $(v).hidden = v !== view;
   $("back").hidden = view !== "detail";
   if (view !== "detail") $("title").textContent = "Toque";
-  $("tabRecipes").classList.toggle("on", view !== "shopping");
+  $("tabRecipes").classList.toggle("on", view === "recipes" || view === "detail");
   $("tabShopping").classList.toggle("on", view === "shopping");
+  $("tabAdd").classList.toggle("on", view === "add");
   state.tab = view;
 }
 
@@ -287,6 +363,7 @@ function route() {
   const m = location.hash.match(/^#r=(.+)$/);
   if (m) openDetail(decodeURIComponent(m[1]), 0, false);
   else if (location.hash === "#shopping") { show("shopping"); loadShopping(true); }
+  else if (location.hash === "#add") show("add");
   else show("recipes");
 }
 
@@ -301,6 +378,16 @@ async function start() {
   $("q").placeholder = T("search");
   $("more").textContent = T("more");
   $("back").setAttribute("aria-label", T("back"));
+  $("tabAdd").setAttribute("aria-label", T("addRecipe"));
+  $("tabAdd").title = T("addRecipe");
+  $("addHelp").textContent = T("addHelp");
+  $("copyPrompt").textContent = "⧉ " + T("copyPrompt");
+  $("copyManual").textContent = T("copyManual");
+  $("paste").placeholder = T("pasteHere");
+  $("importSave").textContent = "✓ " + T("importSave");
+  $("copyPrompt").onclick = copyPrompt;
+  $("importSave").onclick = importRecipes;
+  $("tabAdd").onclick = () => { history.pushState({}, "", "#add"); show("add"); };
   try { state.categories = await get("/api/categories"); } catch (e) {}
   try { state.kcalLevels = (await get("/api/filters")).kcal; } catch (e) {}
   let timer = 0;
