@@ -12,12 +12,11 @@ object ZoneLookup {
 
     class Provider(val name: String, val url: String)
 
-    /** Essayés dans l'ordre ; le dernier, en HTTP simple, sert si les certificats posent problème. */
+    /** Essayés dans l'ordre, uniquement en HTTPS (plus de service en HTTP simple). */
     val PROVIDERS = listOf(
         Provider("ipwho.is", "https://ipwho.is/?fields=success,timezone"),
         Provider("geojs.io", "https://get.geojs.io/v1/ip/geo.json"),
         Provider("ipapi.co", "https://ipapi.co/json/"),
-        Provider("ip-api.com", "http://ip-api.com/json/?fields=status,timezone"),
     )
 
     /** Fuseaux proposés au choix manuel (pays où le robot a été vendu, DOM-TOM compris). */

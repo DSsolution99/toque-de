@@ -158,6 +158,21 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         }, Ui.lp(t = 10))
         refreshWeb()
 
+        // ---- ADB über WLAN (Fernwartung) : protégé par clé (seuls les ordinateurs déjà autorisés),
+        // mais mieux vaut le couper quand on n'en a pas besoin.
+        val adb = section(right, tr("Maintenance à distance (ADB)"), Icon.Kind.SETTINGS)
+        adb.addView(Ui.text(c, tr("Permet à un ordinateur autorisé (clé déjà acceptée sur le robot) de le gérer par le Wi-Fi. À couper quand vous n'en avez pas besoin ; à réactiver ici pour une installation ou un dépannage."),
+            16f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) })
+        adb.addView(toggle(tr("ADB par le Wi-Fi"), adbOverWifi()) { on ->
+            Thread {
+                val prop = if (on) "5555" else "\"\""
+                val port = if (on) "5555" else "-1"
+                val r = RootShell.run("setprop persist.adb.tcp.port $prop && setprop service.adb.tcp.port $port && stop adbd && start adbd", 15_000)
+                a.app.log.write("sécurité", "ADB par le Wi-Fi ${if (on) "activé" else "coupé"} (code ${r.code})")
+                view.post { a.toast(if (on) tr("ADB par le Wi-Fi activé") else tr("ADB par le Wi-Fi coupé")) }
+            }.start()
+        }, Ui.lp(t = 10))
+
         // ---- Mises à jour
         val updates = section(left, tr("Mises à jour"), Icon.Kind.INFO)
         updText = Ui.text(c, "", 16f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) }
@@ -200,6 +215,16 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         setSingleLine()
         background = Ui.round(Ui.SURFACE2, 16f, Ui.STROKE, 1f)
         setPadding(Ui.u(14), 0, Ui.u(14), 0)
+    }
+
+    /** Port ADB réseau configuré (lecture sans root). */
+    private fun adbOverWifi(): Boolean = try {
+        val p = Runtime.getRuntime().exec(arrayOf("getprop", "service.adb.tcp.port"))
+        val v = p.inputStream.bufferedReader().readText().trim()
+        p.waitFor()
+        v.toIntOrNull()?.let { it > 0 } ?: false
+    } catch (_: Exception) {
+        false
     }
 
     private fun toggle(label: String, initial: Boolean, onChange: (Boolean) -> Unit): LinearLayout {

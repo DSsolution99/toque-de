@@ -176,7 +176,10 @@ class Updater(private val context: Context) {
     private fun network(e: IOException): Failure {
         log.write("maj", "réseau : $e")
         return when (e) {
-            is SSLException -> Failure(tr("Connexion sécurisée à GitHub impossible. Vérifiez la date et l'heure du robot."))
+            // L'heure n'est en cause que si l'horloge est restée avant 2025 (robot sans pile d'horloge).
+            is SSLException -> if (System.currentTimeMillis() < 1_735_689_600_000L)
+                Failure(tr("Connexion sécurisée à GitHub impossible. Vérifiez la date et l'heure du robot."))
+            else Failure(tr("Connexion sécurisée à GitHub refusée : %s", e.message ?: e.toString()))
             else -> Failure(tr("Pas de connexion à GitHub. Vérifiez le Wi-Fi du robot."))
         }
     }

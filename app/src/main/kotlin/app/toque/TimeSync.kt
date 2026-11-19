@@ -42,6 +42,9 @@ class TimeSync(private val context: Context, private val prefs: Prefs, private v
                 }
             }
             if (zone == null) return Result(false, current(), tr("Fuseau horaire introuvable : vérifiez le Wi-Fi."))
+            // Trouvé une fois : on le garde. Les vérifications suivantes n'interrogent plus de service
+            // externe (Réglages › Fuseau « automatique » relance une recherche unique).
+            if (zone in available) prefs.timeZone = zone
         } else {
             zone = wanted.takeIf { it in available } ?: return Result(false, current(), tr("Fuseau horaire inconnu : %s", wanted))
         }

@@ -118,7 +118,14 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, servings: Int = 
             reviewsBox.addView(section(if (recipe.ratingCount > 0)
                 tr("Avis · %s/5 (%d notes)", rating(recipe.rating), recipe.ratingCount) else tr("Avis")))
             reviewsBox.addView(reviewsState, Ui.lp(t = 10))
-            loadReviews(apiId, 1)
+            // Les avis viennent d'Internet : chargés seulement à la demande, jamais à l'ouverture.
+            reviewsState.visibility = View.GONE
+            lateinit var load: View
+            load = Ui.button(c, tr("Charger les avis (Internet)"), Ui.Style.GHOST, height = 50, textSize = 16f) {
+                reviewsBox.removeView(load)
+                loadReviews(apiId, 1)
+            }
+            reviewsBox.addView(load, Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
         }
         val stepsBox = Ui.vertical(c)
         stepsBox.background = Ui.round(Ui.SURFACE, 24f)

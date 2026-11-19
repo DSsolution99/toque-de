@@ -104,6 +104,29 @@ cover, the cable, the power switch and a tap on the robot's screen.
   [Releases](https://github.com/DSsolution99/toque-de/releases) and installs the new version
   (silently on a rooted robot, then Toque restarts). Refused while a program is running.
 
+## Network and privacy
+
+Toque only goes online when you ask for it, with one exception (the time):
+
+| Connection | When | To |
+|---|---|---|
+| Recipe sync, photos | *Settings › Lidl recipes › Sync*, or nightly only if *Automatic sync* is on | mc-api.tecpal.com, Lidl photo servers |
+| Reviews of a recipe | Only after tapping *Load reviews* | mc-api.tecpal.com |
+| Update check and download | Only after tapping *Check for an update* | api.github.com, github.com |
+| Time zone | **Once**, if set to *automatic*; then it is kept (choose *automatic* again to re-detect) | ipwho.is, geojs.io or ipapi.co (HTTPS) |
+| Clock | Android's own network time (NTP); the robot has no clock battery | Android's time server |
+
+Inbound, from the home network only:
+
+- **Phone web app** (port 8080, can be turned off): only answers when the address is the robot's own
+  (IP or a local name such as `….fritz.box`), which blocks DNS-rebinding attacks from web pages;
+  changes need the `X-Toque` header and a matching origin; nothing can start the motor or heater.
+- **ADB over Wi-Fi** (port 5555): protected by key (only computers whose key was accepted on the
+  robot), and can be switched off in *Settings › Remote maintenance (ADB)*.
+
+On Android 6 the Let's Encrypt roots (ISRG Root X1/X2) are added to the system ones so that
+GitHub downloads work; certificates are still fully checked.
+
 ## Safety: what changes compared to the stock app
 
 All original limits are kept (speed 3 max when heating and in reverse, maximum durations,

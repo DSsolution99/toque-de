@@ -28,4 +28,26 @@ class LocalNetworkTest {
         assertFalse(LocalNetwork.isLocal(ip(listOf(0x20, 0x01, 0x0d, 0xb8) + List(12) { 1 })))
         assertFalse(LocalNetwork.isLocal(null))
     }
+
+    @Test fun onlyTheRobotsOwnAddressMayBeUsedAsHost() {
+        assertTrue(LocalNetwork.isTrustedHost("192.168.178.36:8080"))
+        assertTrue(LocalNetwork.isTrustedHost("localhost:8080"))
+        assertTrue(LocalNetwork.isTrustedHost("[fe80::1]:8080"))
+        assertTrue(LocalNetwork.isTrustedHost("android-5d4d.fritz.box:8080"))
+        assertTrue(LocalNetwork.isTrustedHost("toque.local"))
+        // DNS rebinding: ein fremder Domainname, der auf das Gerät zeigt.
+        assertFalse(LocalNetwork.isTrustedHost("evil.example.com:8080"))
+        assertFalse(LocalNetwork.isTrustedHost("192.168.178.36.evil.com"))
+        assertFalse(LocalNetwork.isTrustedHost("fritz.box.evil.com"))
+        assertFalse(LocalNetwork.isTrustedHost("999.1.1.1"))
+        assertFalse(LocalNetwork.isTrustedHost(""))
+        assertFalse(LocalNetwork.isTrustedHost(null))
+    }
+
+    @Test fun changesMustComeFromTheRobotsOwnPage() {
+        assertTrue(LocalNetwork.isSameOrigin(null, "192.168.178.36:8080"))
+        assertTrue(LocalNetwork.isSameOrigin("http://192.168.178.36:8080", "192.168.178.36:8080"))
+        assertFalse(LocalNetwork.isSameOrigin("http://evil.example.com", "192.168.178.36:8080"))
+        assertFalse(LocalNetwork.isSameOrigin("http://192.168.178.36:8080", null))
+    }
 }

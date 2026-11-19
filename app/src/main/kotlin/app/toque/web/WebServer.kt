@@ -86,6 +86,16 @@ class WebServer(private val app: ToqueApp) {
                     return
                 }
                 val req = read(BufferedInputStream(sock.getInputStream())) ?: return
+                // Une page Internet qui ferait pointer son nom de domaine vers le robot (DNS rebinding)
+                // n'envoie pas l'adresse du robot dans « Host » : refusée avant toute réponse.
+                if (!LocalNetwork.isTrustedHost(req.headers["host"])) {
+                    write(sock.getOutputStream(), text(403, "forbidden host"))
+                    return
+                }
+                if (req.method == "POST" && !LocalNetwork.isSameOrigin(req.headers["origin"], req.headers["host"])) {
+                    write(sock.getOutputStream(), text(403, "forbidden origin"))
+                    return
+                }
                 val res = try {
                     route(req)
                 } catch (e: Exception) {
