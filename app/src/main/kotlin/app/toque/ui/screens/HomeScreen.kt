@@ -83,7 +83,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val grid = Ui.vertical(c)
         val row1 = Ui.horizontal(c)
         val row2 = Ui.horizontal(c)
-        val (t1, s1) = tile(Icon.Kind.BOOK, tr("Recettes")) { a.push(RecipesScreen(a)) }
+        val (t1, s1) = tile(Icon.Kind.BOOK, tr("Recettes")) { chooseRecipes() }
         recipesSub = s1
         row1.addView(t1, tileLp(true))
         row1.addView(tile(Icon.Kind.POT, tr("Cuisson\nmanuelle"), tr("Temps, chaleur, vitesse")) { a.push(ManualScreen(a)) }.first, tileLp(true))
@@ -99,6 +99,37 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         grid.addView(row2, LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         root.addView(grid, LinearLayout.LayoutParams(0, Ui.MATCH, 0.58f))
         return root
+    }
+
+    /** « Recettes » : parcourir par catégorie, ou toute la liste tout de suite. */
+    private fun chooseRecipes() {
+        val card = Ui.card(c, 28f, Ui.SURFACE2)
+        card.setPadding(Ui.u(28), Ui.u(26), Ui.u(28), Ui.u(28))
+        card.addView(Ui.text(c, tr("Recettes"), 26f, Ui.TEXT, Ui.MEDIUM))
+        val row = Ui.horizontal(c)
+        fun choice(icon: Icon.Kind, label: String, sub: String, gap: Boolean, open: () -> Unit) {
+            val t = Ui.vertical(c)
+            t.setPadding(Ui.u(22), Ui.u(22), Ui.u(20), Ui.u(22))
+            t.background = Ui.pressable(Ui.round(Ui.SURFACE, 24f), 24f)
+            val badge = android.widget.FrameLayout(c)
+            badge.background = Ui.round(Ui.ACCENT_DIM, 26f)
+            badge.addView(Icon(c, icon, Ui.ACCENT), Ui.flp(Ui.u(28), Ui.u(28), Gravity.CENTER))
+            t.addView(badge, LinearLayout.LayoutParams(Ui.u(52), Ui.u(52)))
+            t.addView(Ui.text(c, label, 23f, Ui.TEXT, Ui.MEDIUM), Ui.lp(t = 18))
+            t.addView(Ui.ellipsize(Ui.text(c, sub, 16f, Ui.TEXT2), 2), Ui.lp(t = 6))
+            t.isClickable = true
+            t.setOnClickListener { a.closeOverlay(); open() }
+            row.addView(t, LinearLayout.LayoutParams(0, Ui.WRAP, 1f).apply { if (gap) rightMargin = Ui.u(16) })
+        }
+        val index = a.app.recipes.index
+        choice(Icon.Kind.BOOK, tr("Par catégorie"), tr("%d catégories", index.categoryCounts.size), true) {
+            a.push(CategoriesScreen(a))
+        }
+        choice(Icon.Kind.SEARCH, tr("Toutes les recettes"), tr("%d recettes", index.entries.size), false) {
+            a.push(RecipesScreen(a))
+        }
+        card.addView(row, Ui.lp(Ui.MATCH, Ui.WRAP, t = 20))
+        a.showOverlay(card, 760)
     }
 
     private fun tileLp(gap: Boolean) = LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { if (gap) rightMargin = Ui.u(16) }

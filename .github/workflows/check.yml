@@ -18,6 +18,12 @@ jobs:
           java-version: 17
       - name: Tests and build
         run: ./gradlew --no-daemon :core:test :app:assembleDebug
+      - name: Test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: toque-test-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
       - name: Performance
         if: always()
         run: grep -ho "PERF[^<]*" core/build/test-results/test/*.xml || true

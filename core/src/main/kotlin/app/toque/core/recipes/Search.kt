@@ -201,13 +201,16 @@ class SearchIndex private constructor(
         }
     }
 
-    /** Catégories présentes, les plus fréquentes d'abord (à égalité, par ordre alphabétique). */
-    val categories: List<String> by lazy {
+    /** Catégories présentes avec leur nombre de recettes, les plus fréquentes d'abord (à égalité, par ordre alphabétique). */
+    val categoryCounts: List<Pair<String, Int>> by lazy {
         val counts = HashMap<String, Int>()
         for (e in entries) for (cat in e.categories) if (cat.isNotBlank()) counts[cat] = (counts[cat] ?: 0) + 1
         counts.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { TextNorm.normalize(it.key) })
-            .map { it.key }
+            .map { it.key to it.value }
     }
+
+    /** Catégories présentes, les plus fréquentes d'abord (à égalité, par ordre alphabétique). */
+    val categories: List<String> by lazy { categoryCounts.map { it.first } }
 
     private fun prefixMatches(token: String): List<String> {
         var lo = java.util.Arrays.binarySearch(vocabulary, token)

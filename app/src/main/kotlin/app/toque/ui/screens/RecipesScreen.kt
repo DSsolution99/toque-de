@@ -38,10 +38,15 @@ import java.util.concurrent.Executors
  * Catalogue des recettes Lidl : recherche instantanée tolérante (accents, pluriels, fautes de
  * frappe), filtres, et recherche par ingrédients (séparés par des virgules).
  */
-class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, favorites: Boolean = false) : Screen(a) {
-    override val title = if (favorites) tr("Favoris") else tr("Recettes")
+class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, favorites: Boolean = false,
+                    category: String = "") : Screen(a) {
+    override val title = when {
+        favorites -> tr("Favoris")
+        category.isNotEmpty() -> category
+        else -> tr("Recettes")
+    }
 
-    private var filter = RecipeFilter(favoritesOnly = favorites)
+    private var filter = RecipeFilter(favoritesOnly = favorites, category = category)
     private var query = ""
     private var results: List<SearchIndex.Hit> = emptyList()
     private var generation = 0

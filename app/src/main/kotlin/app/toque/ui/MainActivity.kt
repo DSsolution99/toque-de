@@ -243,7 +243,11 @@ class MainActivity : Activity() {
                 if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_F5
             }
             val s = current
-            if (s != null && currentFocus !is android.widget.EditText) {
+            // Les flèches déplacent le curseur d'un champ de texte ; F5/F6/F7 (le bouton du robot) jamais :
+            // sinon le bouton ne fait rien dans la liste des recettes, dont le champ de recherche a le focus.
+            val arrow = k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
+            if (s != null && (!arrow || currentFocus !is android.widget.EditText)) {
                 if (left && s.onKnob(-1)) return true
                 if (right && s.onKnob(1)) return true
                 if (press && s.onKnobPress()) return true
