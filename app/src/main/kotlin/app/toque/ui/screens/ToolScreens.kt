@@ -156,7 +156,7 @@ class KnobScreen(a: MainActivity) : Screen(a) {
     private fun refresh() {
         fun name(k: Int, def: String) = if (k < 0) tr("%s (par défaut)", def) else KeyEvent.keyCodeToString(k).removePrefix("KEYCODE_")
         info.text = tr("Gauche : %s\nDroite : %s\nAppui : %s\n\nLes molettes (défilement) sont aussi reconnues automatiquement.",
-            name(a.prefs.knobLeft, "DPAD_LEFT"), name(a.prefs.knobRight, "DPAD_RIGHT"), name(a.prefs.knobPress, "DPAD_CENTER"))
+            name(a.prefs.knobLeft, "F7 / DPAD_LEFT"), name(a.prefs.knobRight, "F6 / DPAD_RIGHT"), name(a.prefs.knobPress, "F5 / DPAD_CENTER"))
     }
 
     override fun onHide() {
