@@ -158,6 +158,26 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         }, Ui.lp(t = 10))
         refreshWeb()
 
+        // ---- Veille de l'écran
+        val screen = section(right, tr("Écran"), Icon.Kind.INFO)
+        screen.addView(Ui.text(c, tr("Sans action, l'écran passe au noir et s'éteint. Un toucher ou le bouton rotatif le rallume. Il reste allumé pendant un programme et quand le poids change sur la balance."),
+            16f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) })
+        val levels = intArrayOf(2, 5, 10, 30, 0)
+        fun sleepLabel(m: Int) = if (m == 0) tr("Veille : jamais") else tr("Veille après %d min", m)
+        lateinit var sleepButton: TextView
+        sleepButton = Ui.text(c, sleepLabel(a.prefs.sleepMinutes), 18f, Ui.TEXT, Ui.MEDIUM).apply {
+            setPadding(Ui.u(20), Ui.u(12), Ui.u(20), Ui.u(12))
+            background = Ui.pressable(Ui.round(Ui.SURFACE3, 24f), 24f)
+            isClickable = true
+            setOnClickListener {
+                val i = levels.indexOf(a.prefs.sleepMinutes)
+                a.prefs.sleepMinutes = levels[(if (i < 0) 0 else i + 1) % levels.size]
+                sleepButton.text = sleepLabel(a.prefs.sleepMinutes)
+                a.wake()
+            }
+        }
+        screen.addView(sleepButton, Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
+
         // ---- ADB über WLAN (Fernwartung) : protégé par clé (seuls les ordinateurs déjà autorisés),
         // mais mieux vaut le couper quand on n'en a pas besoin.
         val adb = section(right, tr("Maintenance à distance (ADB)"), Icon.Kind.SETTINGS)

@@ -110,6 +110,13 @@ class Prefs(context: Context) {
             p.edit().putBoolean("webAccess", v).commit()
         }
 
+    /** Veille de l'écran après ce nombre de minutes sans action (0 : jamais). */
+    var sleepMinutes: Int
+        get() = p.getInt("sleepMinutes", 5)
+        set(v) {
+            p.edit().putInt("sleepMinutes", v).commit()
+        }
+
     var autoSync: Boolean
         get() = p.getBoolean("autoSync", true)
         set(v) {

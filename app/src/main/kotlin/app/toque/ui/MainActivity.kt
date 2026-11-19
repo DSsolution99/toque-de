@@ -79,6 +79,9 @@ class MainActivity : Activity() {
         overlay = FrameLayout(this)
         overlay.visibility = View.GONE
         root.addView(overlay, Ui.flp())
+        // Veille : un écran noir par-dessus tout, rétroéclairage coupé (voir [sleep]).
+        sleepView = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK); visibility = View.GONE }
+        root.addView(sleepView, Ui.flp())
         setContentView(root)
 
         try {
@@ -108,6 +111,7 @@ class MainActivity : Activity() {
         intent.removeExtra(EXTRA_OPEN_RECIPE)
         val servings = intent.getIntExtra(EXTRA_SERVINGS, 0)
         val recipe = app.recipes.get(id) ?: return
+        wake()
         if (snapshot.busy) {
             toast(tr("Recette « %s » reçue du téléphone : terminez d'abord le programme en cours", recipe.title), Ui.WARN)
             return
@@ -129,6 +133,9 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         unsubscribe = app.machine.onSnapshot { s ->
+            // Programme en cours ou poids qui change (on pèse) : l'écran reste allumé.
+            if (s.busy || (lastWeight != Int.MIN_VALUE && Math.abs(s.weightG - lastWeight) >= 5)) wake()
+            lastWeight = s.weightG
             topBar.update(s)
             machineBar.update(s)
             stack.lastOrNull()?.onSnapshot(s)
@@ -139,10 +146,71 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        wake()
         immersive()
         prefs.returnBubble = false
         ReturnBubble.stop(this)
         if (prefs.vendorSession) endVendorSession()
+    }
+
+    override fun onPause() {
+        main.removeCallbacks(sleepTimer)
+        super.onPause()
+    }
+
+    // ------------------------------------------------------------------ veille de l'écran
+
+    /*
+     * Le robot n'a pas de bouton marche/arrêt : si Android éteignait vraiment l'écran, un toucher ne
+     * le rallumerait pas forcément. Toque garde donc l'écran actif mais, après quelques minutes sans
+     * action (et sans programme en cours), affiche un écran noir et coupe le rétroéclairage.
+     * Un toucher (absorbé) ou le bouton rotatif le rallume.
+     */
+    private lateinit var sleepView: FrameLayout
+    private var asleep = false
+    private var swallowTouch = false
+    private var lastWeight = Int.MIN_VALUE
+    private val sleepTimer = Runnable { sleep() }
+
+    /** Rallume l'écran si besoin et relance le délai de veille. */
+    fun wake() {
+        if (asleep) {
+            asleep = false
+            sleepView.visibility = View.GONE
+            brightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+        }
+        main.removeCallbacks(sleepTimer)
+        val minutes = prefs.sleepMinutes
+        if (minutes > 0) main.postDelayed(sleepTimer, minutes * 60_000L)
+    }
+
+    private fun sleep() {
+        if (snapshot.busy) { wake(); return }
+        hideKeyboard()
+        asleep = true
+        sleepView.visibility = View.VISIBLE
+        sleepView.bringToFront()
+        brightness(0f)
+    }
+
+    private fun brightness(v: Float) {
+        val lp = window.attributes
+        lp.screenBrightness = v
+        window.attributes = lp
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (asleep) {
+            // Le toucher qui réveille ne doit rien déclencher dessous.
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN) { wake(); swallowTouch = true }
+            return true
+        }
+        if (swallowTouch) {
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) swallowTouch = false
+            return true
+        }
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) wake()
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onStop() {
@@ -230,6 +298,11 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ bouton rotatif
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (asleep) {
+            if (event.action == KeyEvent.ACTION_DOWN) wake()
+            return true
+        }
+        if (event.action == KeyEvent.ACTION_DOWN) wake()
         knobListener?.let { l ->
             if (event.action == KeyEvent.ACTION_DOWN) l(event)
             return true
@@ -257,6 +330,11 @@ class MainActivity : Activity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (asleep) {
+            if (event.action == MotionEvent.ACTION_SCROLL) wake()
+            return true
+        }
+        if (event.action == MotionEvent.ACTION_SCROLL) wake()
         if (event.action == MotionEvent.ACTION_SCROLL) {
             // Encodeur rotatif (AXIS_SCROLL) ou molette (AXIS_VSCROLL)
             val v = event.getAxisValue(AXIS_SCROLL).let { if (it == 0f) -event.getAxisValue(MotionEvent.AXIS_VSCROLL) else it }
@@ -272,6 +350,7 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ évènements machine
 
     private fun onMachineEvent(e: MachineEvent) {
+        wake()
         current?.onEvent(e)
         when (e.type) {
             EventType.JOB_FINISHED -> chime(2)
