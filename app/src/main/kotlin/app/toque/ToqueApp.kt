@@ -29,6 +29,7 @@ class ToqueApp : Application() {
         super.onCreate()
         prefs = Prefs(this)
         log = Logbook(this)
+        ExtraRoots.install(this, log)
         LanguageFiles.install(this, log)
         I18n.select(I18n.resolve(prefs.language, Locale.getDefault().language).code)
         if (!isMainProcess()) return
