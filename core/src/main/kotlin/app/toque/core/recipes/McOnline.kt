@@ -47,6 +47,25 @@ object McOnline {
 
     fun toqueId(apiId: Long): String = ID_PREFIX + apiId
 
+    /** Serveurs de photos de Lidl qui servent les mêmes fichiers (même chemin). */
+    private val PHOTO_HOSTS = listOf(
+        "mc-web-user-content-cdn.tecpal.com",
+        "mc-web-content-cdn.tecpal.com",
+        "mc-recipe-web-user-prod.storage.googleapis.com",
+    )
+
+    /**
+     * Adresses à essayer pour une photo : l'originale, puis les autres serveurs de Lidl.
+     * Le certificat de mc-web-user-content-cdn a expiré le 17/11/2026 ; les copies restent
+     * disponibles sur les autres serveurs.
+     */
+    fun photoUrls(url: String): List<String> {
+        val m = Regex("^https://([^/]+)(/.*)$").find(url) ?: return listOf(url)
+        val (host, path) = m.destructured
+        if (host !in PHOTO_HOSTS) return listOf(url)
+        return listOf(url) + PHOTO_HOSTS.filter { it != host }.map { "https://$it$path" }
+    }
+
     /** Langue des recettes d'après celle de l'interface (le français par défaut). */
     fun languageFor(uiCode: String): String = when (uiCode.substringBefore('-').lowercase()) {
         "fr" -> "fr-FR"

@@ -184,4 +184,14 @@ class McOnlineTest {
         assertTrue(r.notes.contains("autre modèle"))
         assertTrue(r.tags.contains("Communauté"))
     }
+
+    @Test fun photosFallBackToLidlMirrors() {
+        val path = "/media-service-upload/images/20250218101256/1000131846_thumbnail.jpg"
+        val urls = McOnline.photoUrls("https://mc-web-user-content-cdn.tecpal.com$path")
+        assertEquals(3, urls.size)
+        assertEquals("https://mc-web-user-content-cdn.tecpal.com$path", urls[0])
+        assertEquals("https://mc-web-content-cdn.tecpal.com$path", urls[1])
+        assertTrue(urls.all { it.endsWith(path) })
+        assertEquals(listOf("https://example.com/a.jpg"), McOnline.photoUrls("https://example.com/a.jpg"))
+    }
 }

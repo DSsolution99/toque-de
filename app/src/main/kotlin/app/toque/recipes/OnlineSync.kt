@@ -163,7 +163,18 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
 
     /** Photo réduite (800 px de large au plus), enregistrée sous le nom de fichier de l'URL. */
     private fun savePhoto(url: String) {
-        val bytes = download(url, emptyMap(), 8 * 1024 * 1024)
+        // Un serveur de Lidl en panne (certificat expiré…) ne doit pas priver de photo : on essaie les copies.
+        var bytes: ByteArray? = null
+        var error: IOException? = null
+        for (candidate in McOnline.photoUrls(url)) {
+            try {
+                bytes = download(candidate, emptyMap(), 8 * 1024 * 1024)
+                break
+            } catch (e: IOException) {
+                if (error == null) error = e
+            }
+        }
+        if (bytes == null) throw error ?: IOException(tr("image illisible"))
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0) throw IOException(tr("image illisible"))
