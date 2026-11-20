@@ -107,6 +107,9 @@ class MachineController(
     var latest: Telemetry? = null
         private set
     private var latestAtMs = Long.MIN_VALUE / 4
+
+    /** Instant de la dernière mesure reçue de la base (horloge du contrôleur). */
+    val lastSampleAtMs: Long get() = latestAtMs
     private var seq = 0L
 
     var link = LinkState.OFFLINE

@@ -26,6 +26,8 @@ class MachineLoop(
     private val controller = MachineController(clock, config)
     @Volatile private var transport: Transport? = null
     private var nextOpenAt = 0L
+    private var openedAt = 0L
+    private var silentReopens = 0
     private var openFailures = 0
     @Volatile private var running = false
     @Volatile var suspended = false
@@ -71,6 +73,17 @@ class MachineLoop(
         val now = clock.nowMs()
         if (transport == null && !suspended && now >= nextOpenAt) openTransport(now)
         val frame = controller.tick()
+        // Port ouvert mais base muette (par ex. après une mise en veille d'Android, qui réinitialise
+        // le port série) : on ferme et on rouvre, ce qui refait le réglage du port.
+        transport?.let { open ->
+            if (controller.lastSampleAtMs > openedAt) silentReopens = 0
+            val lastRx = maxOf(controller.lastSampleAtMs, openedAt)
+            if (now - lastRx > SILENT_REOPEN_MS) {
+                closeTransport(open, tr("base muette, reconnexion"))
+                // Base éteinte (interrupteur) : on réessaie de plus en plus rarement, jusqu'à 1 min.
+                nextOpenAt = now + retryDelayMs(++silentReopens)
+            }
+        }
         val t = transport
         if (t != null) {
             try {
@@ -102,6 +115,7 @@ class MachineLoop(
         }
         lastOpenError = ""
         openFailures = 0
+        openedAt = now
         transport = t
         controller.onTransportUp(t.name)
         log("liaison ouverte : ${t.name}")
@@ -219,6 +233,9 @@ class MachineLoop(
     }
 
     companion object {
+        /** Sans mesure pendant ce temps, la liaison est rouverte. */
+        const val SILENT_REOPEN_MS = 5_000L
+
         /**
          * Délai avant de retenter d'ouvrir la liaison : 3 s, puis de plus en plus espacé jusqu'à
          * 1 min (évite, par exemple, une demande root toutes les 3 s quand Magisk refuse).

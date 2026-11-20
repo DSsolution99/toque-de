@@ -448,6 +448,7 @@
   "au besoin": "nach Bedarf",
   "aucune": "keine",
   "automatique": "automatisch",
+  "base muette, reconnexion": "Motorbasis antwortet nicht, Verbindung wird neu aufgebaut",
   "bol NON détecté": "Mixbehälter NICHT erkannt",
   "bol détecté": "Mixbehälter erkannt",
   "busybox introuvable (fourni par Magisk)": "busybox nicht gefunden (kommt von Magisk)",
