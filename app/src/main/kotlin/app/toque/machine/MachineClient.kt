@@ -124,6 +124,8 @@ class MachineClient(private val context: Context) {
     fun reconfigure(cb: (Verdict) -> Unit) = sendRaw(Ipc.RECONFIGURE, null, cb)
     fun suspendPort(cb: (Verdict) -> Unit) = sendRaw(Ipc.SUSPEND_PORT, null, cb)
     fun resumePort(cb: (Verdict) -> Unit = {}) = sendRaw(Ipc.RESUME_PORT, null, cb)
+    /** Reconnecte la base sans attendre (au réveil de l'écran). */
+    fun reconnect() = sendRaw(Ipc.RECONNECT, null, null)
 
     fun adjust(speed: Int? = null, temp: Int? = null, reverse: Boolean? = null, totalMs: Long? = null,
                hot: Boolean = false, cb: (Verdict) -> Unit) {

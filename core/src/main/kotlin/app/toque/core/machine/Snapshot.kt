@@ -8,6 +8,8 @@ data class Snapshot(
     val link: LinkState = LinkState.OFFLINE,
     val transportName: String = "",
     val transportUp: Boolean = false,
+    /** La base a déjà répondu, ne répond plus, et la liaison est en train d'être rétablie. */
+    val reconnecting: Boolean = false,
     val faultCode: String = "",
     val faultMessage: String = "",
     val hasSample: Boolean = false,
@@ -62,6 +64,7 @@ data class Snapshot(
 
     fun toMap(): Map<String, Any> = linkedMapOf(
         "link" to link.name, "transportName" to transportName, "transportUp" to transportUp,
+        "reconnecting" to reconnecting,
         "faultCode" to faultCode, "faultMessage" to faultMessage, "hasSample" to hasSample,
         "sampleAgeMs" to sampleAgeMs, "actualTempC" to actualTempC, "targetTempC" to targetTempC,
         "rpm" to rpm, "speedLevel" to speedLevel, "weightG" to weightG, "scaleStable" to scaleStable,
@@ -86,7 +89,7 @@ data class Snapshot(
             fun b(k: String) = m[k] as? Boolean ?: false
             return Snapshot(
                 link = runCatching { LinkState.valueOf(s("link")) }.getOrDefault(LinkState.OFFLINE),
-                transportName = s("transportName"), transportUp = b("transportUp"),
+                transportName = s("transportName"), transportUp = b("transportUp"), reconnecting = b("reconnecting"),
                 faultCode = s("faultCode"), faultMessage = s("faultMessage"), hasSample = b("hasSample"),
                 sampleAgeMs = l("sampleAgeMs"), actualTempC = i("actualTempC"), targetTempC = i("targetTempC"),
                 rpm = i("rpm"), speedLevel = i("speedLevel"), weightG = i("weightG"), scaleStable = b("scaleStable"),

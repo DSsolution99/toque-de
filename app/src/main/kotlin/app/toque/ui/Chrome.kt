@@ -110,7 +110,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
         val (label, color) = when {
             s.hasFault -> tr("Alerte") to Ui.DANGER
             s.link == LinkState.READY -> (if (demo) tr("Démo") else tr("Prête")) to (if (demo) Ui.COOL else Ui.OK)
-            s.link == LinkState.ARMING -> tr("Connexion…") to Ui.WARN
+            s.link == LinkState.ARMING || s.reconnecting -> tr("Connexion…") to Ui.WARN
             s.link == LinkState.LOST -> tr("Liaison perdue") to Ui.DANGER
             else -> tr("Base absente") to Ui.TEXT3
         }

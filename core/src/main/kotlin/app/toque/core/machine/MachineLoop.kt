@@ -28,6 +28,7 @@ class MachineLoop(
     private var nextOpenAt = 0L
     private var openedAt = 0L
     private var silentReopens = 0
+    private var everReady = false
     private var openFailures = 0
     @Volatile private var running = false
     @Volatile var suspended = false
@@ -93,7 +94,10 @@ class MachineLoop(
                 closeTransport(t, tr("écriture impossible"))
             }
         }
-        onSnapshot(controller.snapshot())
+        if (controller.link == LinkState.READY) everReady = true
+        // « Reconnexion » : la base a déjà répondu, elle ne répond plus, et on s'en occupe.
+        val reconnecting = everReady && !suspended && controller.link != LinkState.READY
+        onSnapshot(controller.snapshot().copy(reconnecting = reconnecting))
     }
 
     private fun openTransport(now: Long) {
@@ -185,6 +189,21 @@ class MachineLoop(
             c.onTransportDown(tr("port libéré"))
         }
         true
+    }
+
+    /**
+     * Au réveil : si la base ne répond pas, on rouvre la liaison tout de suite (sans le délai
+     * croissant des nouvelles tentatives), ce qui refait aussi le réglage du port série.
+     */
+    fun reconnectNow() {
+        post { c ->
+            if (suspended || c.link == LinkState.READY) return@post
+            silentReopens = 0
+            openFailures = 0
+            nextOpenAt = 0
+            transport?.let { closeTransport(it, tr("réveil : reconnexion")) }
+            nextOpenAt = 0
+        }
     }
 
     fun resumePort() {

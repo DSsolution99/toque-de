@@ -7,7 +7,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.PowerManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -73,22 +72,23 @@ class MachineService : Service() {
             previous?.uncaughtException(thread, error)
         }
         startForeground(NOTIFICATION_ID, notification(tr("Base moteur"), tr("Démarrage…")))
-        // Le robot est toujours branché : le processeur ne doit jamais s'endormir pendant qu'on
-        // pilote le moteur (la boucle doit tourner toutes les 100 ms, et le port série perdrait
-        // son réglage). Un verrou partiel garde le processeur actif, pas l'écran.
-        wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "toque:machine").apply { setReferenceCounted(false); acquire() }
         createLoop()
+        // Au réveil d'Android (écran rallumé), la base est reconnectée tout de suite.
+        registerReceiver(screenOn, android.content.IntentFilter(Intent.ACTION_SCREEN_ON))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onBind(intent: Intent?): IBinder = messenger.binder
 
-    private var wakeLock: PowerManager.WakeLock? = null
+    private val screenOn = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            loop?.reconnectNow()
+        }
+    }
 
     override fun onDestroy() {
-        try { wakeLock?.release() } catch (_: Throwable) {}
+        try { unregisterReceiver(screenOn) } catch (_: Throwable) {}
         loop?.shutdown()
         loop = null
         super.onDestroy()
@@ -247,6 +247,7 @@ class MachineService : Service() {
                 l.resumePort()
                 reply(to, id, Verdict.OK)
             }
+            Ipc.RECONNECT -> l.reconnectNow()
             Ipc.SIM -> {
                 val b = sim
                 if (b != null) {

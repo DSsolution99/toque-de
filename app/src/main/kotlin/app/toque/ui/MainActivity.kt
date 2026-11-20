@@ -147,6 +147,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         wake()
+        if (!snapshot.ready && prefs.mode == Prefs.Mode.HARDWARE) machine.reconnect()
         immersive()
         prefs.returnBubble = false
         ReturnBubble.stop(this)
@@ -175,6 +176,7 @@ class MainActivity : Activity() {
     /** Rallume l'écran si besoin et relance le délai de veille. */
     fun wake() {
         if (asleep) {
+            if (!snapshot.ready) machine.reconnect()
             asleep = false
             sleepView.visibility = View.GONE
             brightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
