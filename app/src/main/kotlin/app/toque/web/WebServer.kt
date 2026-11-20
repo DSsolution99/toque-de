@@ -237,6 +237,7 @@ class WebServer(private val app: ToqueApp) {
             maxMinutes = q["minutes"]?.toIntOrNull() ?: 0,
             maxKcal = q["kcal"]?.toIntOrNull() ?: 0,
             source = if (q["mine"] == "1") RecipeSource.USER else null,
+            deviceOnly = q["device"] == "1",
             sort = sort,
         )
         val query = q["q"].orEmpty()

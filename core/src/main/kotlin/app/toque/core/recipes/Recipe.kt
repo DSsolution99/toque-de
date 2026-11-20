@@ -162,6 +162,8 @@ data class Recipe(
     val published: String = "",
     /** Page de la recette sur le site, vide si inconnue. */
     val url: String = "",
+    /** Modèles Monsieur Cuisine pour lesquels le site publie la recette (« MC2.0 » : Connect). */
+    val devices: List<String> = emptyList(),
 ) {
     val machineSteps: Int get() = steps.count { it.machine != null }
     val allIngredients: List<Ingredient> get() = ingredients.flatMap { it.items }
@@ -200,6 +202,7 @@ object RecipeCodec {
         "popularity" to r.popularity,
         "published" to r.published,
         "url" to r.url,
+        "devices" to r.devices,
         "ingredients" to r.ingredients.map { g ->
             linkedMapOf(
                 "group" to g.title,
@@ -284,6 +287,7 @@ object RecipeCodec {
             popularity = (m.double("popularity") ?: 0.0).coerceAtLeast(0.0),
             published = m.str("published")?.trim().orEmpty(),
             url = m.str("url")?.trim().orEmpty(),
+            devices = m["devices"].list().mapNotNull { (it as? String)?.trim()?.takeIf { d -> d.isNotEmpty() } },
         )
     }
 

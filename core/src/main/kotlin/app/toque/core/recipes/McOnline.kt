@@ -95,7 +95,8 @@ object McOnline {
         val popularity: Double = 0.0,
     ) {
         /** Empreinte enregistrée dans l'index de synchro : fiche modifiée, ou seulement sa note. */
-        val stamp: String get() = "$updated|${ratingText(rating)}|$ratingCount|$author|${ratingText(popularity)}"
+        val stamp: String get() = "$updated|${ratingText(rating)}|$ratingCount|$author|${ratingText(popularity)}|" +
+            devices.sorted().joinToString(",")
     }
 
     /** Date de mise à jour d'une empreinte d'index (les anciens index n'ont que la date). */
@@ -232,6 +233,7 @@ object McOnline {
             popularity = (r.double("popularity") ?: 0.0).coerceAtLeast(0.0),
             published = (r.str("publishedDate") ?: r.str("createdDate"))?.trim()?.take(10).orEmpty(),
             url = r.str("url")?.trim()?.takeIf { it.startsWith("https://") }.orEmpty(),
+            devices = devices,
         )
     }
 
@@ -261,7 +263,8 @@ object McOnline {
     /** Recette déjà téléchargée dont seuls l'auteur, la note ou la popularité ont changé sur le site. */
     fun withScore(r: Recipe, e: Entry): Recipe =
         r.copy(author = e.author.ifEmpty { r.author }, rating = e.rating, ratingCount = e.ratingCount,
-            popularity = if (e.popularity > 0) e.popularity else r.popularity)
+            popularity = if (e.popularity > 0) e.popularity else r.popularity,
+            devices = e.devices.ifEmpty { r.devices })
 
     // ------------------------------------------------------------------ avis
 

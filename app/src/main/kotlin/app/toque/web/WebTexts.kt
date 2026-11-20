@@ -57,6 +57,7 @@ object WebTexts {
         "loading" to trKey("Chargement…"),
         "notes" to trKey("Remarques"),
         "mine" to trKey("Mes recettes"),
+        "forDevice" to trKey("Pour ce robot"),
         "addRecipe" to trKey("Ajouter une recette"),
         "addHelp" to trKey("Faites convertir la recette par un assistant comme Claude : copiez le mode d'emploi, envoyez-le avec votre recette (texte, lien ou photo), puis collez la réponse ici."),
         "copyPrompt" to trKey("Copier le mode d'emploi"),

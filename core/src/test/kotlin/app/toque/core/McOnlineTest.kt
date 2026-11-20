@@ -26,7 +26,7 @@ class McOnlineTest {
         assertEquals(500, p.entries[0].ratingCount)
         assertEquals(3.5, p.entries[1].rating, 0.001)
         assertEquals(0, p.entries[2].ratingCount)
-        assertEquals("2026-04-19 09:00:02|4.40|500|Chef d'essai|0.00", p.entries[0].stamp)
+        assertTrue(p.entries[0].stamp.startsWith("2026-04-19 09:00:02|4.40|500|Chef d'essai|0.00|"))
         assertEquals("2026-04-19 09:00:02", McOnline.updatedOf(p.entries[0].stamp))
         assertEquals("2025-01-02 10:00:00", McOnline.updatedOf("2025-01-02 10:00:00"))
     }

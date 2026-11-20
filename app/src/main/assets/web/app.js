@@ -40,6 +40,7 @@ const state = {
   sort: "RELEVANCE",
   favorites: false,
   mine: false,
+  device: false,
   minutes: 0,
   kcal: 0,
   category: "",
@@ -61,6 +62,7 @@ function renderChips() {
     sorts.map(([v, k]) => `<option value="${v}"${state.sort === v ? " selected" : ""}>⇅ ${esc(T(k))}</option>`).join("") +
     `</select>` +
     `<button class="chip${state.favorites ? " on" : ""}" data-f="favorites">★ ${esc(T("favorites"))}</button>` +
+    `<button class="chip${state.device ? " on" : ""}" data-f="device">✓ ${esc(T("forDevice"))}</button>` +
     `<button class="chip${state.mine ? " on" : ""}" data-f="mine">✎ ${esc(T("mine"))}</button>` +
     `<button class="chip${state.minutes ? " on" : ""}" data-f="minutes">${esc(T("minutes30"))}</button>` +
     `<select class="chip${state.kcal ? " on" : ""}" id="kcal" title="${esc(T("kcalHint"))}"><option value="0">${esc(T("calories"))}</option>` +
@@ -76,6 +78,7 @@ function renderChips() {
     const f = b.dataset.f;
     if (f === "favorites") state.favorites = !state.favorites;
     if (f === "mine") state.mine = !state.mine;
+    if (f === "device") state.device = !state.device;
     if (f === "minutes") state.minutes = state.minutes ? 0 : 30;
     reload();
   }));
@@ -85,6 +88,7 @@ function query() {
   const p = new URLSearchParams({ q: state.q, sort: state.sort, offset: state.offset, limit: 40 });
   if (state.favorites) p.set("favorites", "1");
   if (state.mine) p.set("mine", "1");
+  if (state.device) p.set("device", "1");
   if (state.minutes) p.set("minutes", state.minutes);
   if (state.kcal) p.set("kcal", state.kcal);
   if (state.category) p.set("category", state.category);

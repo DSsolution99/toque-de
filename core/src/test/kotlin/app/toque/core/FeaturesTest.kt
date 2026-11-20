@@ -206,4 +206,23 @@ class FeaturesTest {
         val group = (v["groups"] as List<Map<String, Any?>>).single()
         assertEquals("Gemüse", group["aisle"])
     }
+
+    @Test fun deviceFilterKeepsConnectAndOwnRecipes() {
+        fun r(id: String, devices: List<String>, source: app.toque.core.recipes.RecipeSource = app.toque.core.recipes.RecipeSource.IMPORTED) =
+            Recipe(id = id, title = "Suppe $id", devices = devices, source = source,
+                steps = listOf(app.toque.core.recipes.Step("a")))
+        val index = SearchIndex(listOf(
+            r("connect", listOf("MC2.0", "MC3.0")),
+            r("smart", listOf("MC3.0")),
+            r("plus", listOf("MC1.1")),
+            r("unbekannt", emptyList()),
+            r("perso-eigen", listOf("MC3.0"), app.toque.core.recipes.RecipeSource.USER),
+        ))
+        val ids = index.search("", RecipeFilter(deviceOnly = true)).map { it.entry.id }.toSet()
+        assertEquals(setOf("connect", "unbekannt", "perso-eigen"), ids)
+        assertEquals(5, index.search("", RecipeFilter()).size)
+        // Gerätemodelle überstehen Speichern und Laden.
+        val back = RecipeCodec.decode(RecipeCodec.encode(r("x", listOf("MC2.0"))))!!
+        assertEquals(listOf("MC2.0"), back.devices)
+    }
 }

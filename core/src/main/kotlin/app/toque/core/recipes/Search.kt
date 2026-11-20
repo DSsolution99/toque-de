@@ -85,6 +85,8 @@ data class RecipeFilter(
      */
     val maxKcal: Int = 0,
     val sort: RecipeSort = RecipeSort.RELEVANCE,
+    /** Seulement les recettes faites pour ce modèle (Monsieur Cuisine Connect). */
+    val deviceOnly: Boolean = false,
 ) {
     companion object {
         /** Paliers proposés pour [maxKcal]. */
@@ -137,6 +139,11 @@ class SearchIndex private constructor(
         val published: String = "",
         /** Calories d'une portion-repas (0 : inconnues, ou recette donnée à la pièce, au verre…). */
         val portionKcal: Int = 0,
+        /**
+         * Recette faite pour ce robot : publiée pour le Connect (MC2.0), recette personnelle, ou
+         * modèle inconnu (avant la synchro qui enregistre les modèles).
+         */
+        val forDevice: Boolean = true,
     )
 
     data class Hit(val entry: Entry, val score: Double, val matched: Int)
@@ -154,7 +161,8 @@ class SearchIndex private constructor(
             entries += Entry(r.id, r.title, r.category, r.tags, r.favorite, r.source, r.totalMinutes, r.image,
                 r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount,
                 r.allCategories, r.nutrition?.kcal ?: 0, r.popularity, r.published,
-                if (RecipeFilter.isPortionUnit(r.servingUnit)) r.nutrition?.kcal ?: 0 else 0)
+                if (RecipeFilter.isPortionUnit(r.servingUnit)) r.nutrition?.kcal ?: 0 else 0,
+                r.source == RecipeSource.USER || r.devices.isEmpty() || McOnline.DEVICE in r.devices)
             fun add(text: String, w: Int) {
                 for (t in TextNorm.tokens(text)) {
                     val p = postings.getOrPut(t) { HashMap(4) }
@@ -251,6 +259,7 @@ class SearchIndex private constructor(
         if (f.category.isNotEmpty() && e.category != f.category && f.category !in e.categories) return false
         if (f.maxKcal > 0 && (e.portionKcal <= 0 || e.portionKcal > f.maxKcal)) return false
         if (f.favoritesOnly && !e.favorite) return false
+        if (f.deviceOnly && !e.forDevice) return false
         if (f.source != null && e.source != f.source) return false
         if (f.maxMinutes > 0 && (e.totalMinutes <= 0 || e.totalMinutes > f.maxMinutes)) return false
         return true

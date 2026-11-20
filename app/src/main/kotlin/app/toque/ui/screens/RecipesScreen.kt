@@ -157,6 +157,7 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         // Recettes personnelles (importées par le téléphone) : la puce n'apparaît que s'il y en a.
         if (a.app.recipes.index.entries.any { it.source == RecipeSource.USER })
             chip(tr("Mes recettes"), filter.source == RecipeSource.USER, base.copy(source = RecipeSource.USER))
+        chip(tr("Pour ce robot"), filter.deviceOnly, base.copy(deviceOnly = true))
         chip(tr("30 min max"), filter.maxMinutes == 30, base.copy(maxMinutes = 30))
         // Calories : une touche passe au palier suivant (200 → 300 → … → 800 → sans limite).
         val levels = RecipeFilter.KCAL_LEVELS
