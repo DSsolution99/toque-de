@@ -77,12 +77,14 @@ class MachineLoop(
         // Port ouvert mais base muette (par ex. après une mise en veille d'Android, qui réinitialise
         // le port série) : on ferme et on rouvre, ce qui refait le réglage du port.
         transport?.let { open ->
+            // Heure relue ici : l'ouverture juste au-dessus peut prendre plusieurs secondes (root).
+            val at = clock.nowMs()
             if (controller.lastSampleAtMs > openedAt) silentReopens = 0
             val lastRx = maxOf(controller.lastSampleAtMs, openedAt)
-            if (now - lastRx > SILENT_REOPEN_MS) {
+            if (at - lastRx > SILENT_REOPEN_MS) {
                 closeTransport(open, tr("base muette, reconnexion"))
                 // Base éteinte (interrupteur) : on réessaie de plus en plus rarement, jusqu'à 1 min.
-                nextOpenAt = now + retryDelayMs(++silentReopens)
+                nextOpenAt = at + retryDelayMs(++silentReopens)
             }
         }
         val t = transport
@@ -119,7 +121,8 @@ class MachineLoop(
         }
         lastOpenError = ""
         openFailures = 0
-        openedAt = now
+        // Fin de l'ouverture (et non son début) : la base a 5 s pour répondre à partir de maintenant.
+        openedAt = clock.nowMs()
         transport = t
         controller.onTransportUp(t.name)
         log("liaison ouverte : ${t.name}")
