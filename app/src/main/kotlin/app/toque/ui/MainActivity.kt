@@ -197,9 +197,9 @@ class MainActivity : Activity() {
         asleep = true
         sleepView.visibility = View.VISIBLE
         sleepView.bringToFront()
-        brightness(0f)
-        // Android ne descend pas sous la luminosité minimale : on coupe le rétroéclairage lui-même.
-        if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.off()
+        // Sur le robot : rétroéclairage coupé directement. Pas de luminosité de fenêtre à 0 en plus :
+        // Android l'atteindrait en fondu et réécrirait son minimum (10) après notre 0.
+        if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.off() else brightness(0f)
     }
 
     private fun brightness(v: Float) {
