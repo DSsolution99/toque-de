@@ -2,6 +2,7 @@ package app.toque.ui
 
 import android.app.Activity
 import android.content.Intent
+import app.toque.core.machine.RootShell
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
@@ -83,6 +84,7 @@ class MainActivity : Activity() {
         sleepView = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK); visibility = View.GONE }
         root.addView(sleepView, Ui.flp())
         setContentView(root)
+        registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
         // Après un arrêt brutal pendant la veille, le rétroéclairage pourrait être resté coupé.
         if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.on()
 
@@ -173,6 +175,24 @@ class MainActivity : Activity() {
      */
     private lateinit var sleepView: FrameLayout
     private var asleep = false
+    /** Dernier réveil de la veille de Toque (horloge système). */
+    private var wokeAtMs = 0L
+
+    /*
+     * Le pilote du clavier du robot (« mtk-kpd ») envoie aussi la touche Marche/Arrêt quand on appuie
+     * sur le bouton pendant que le rétroéclairage est coupé : Android éteignait alors l'écran juste
+     * après que Toque l'avait rallumé. Un écran éteint par Android pendant la veille de Toque ou dans
+     * la seconde et demie qui suit son réveil est donc rallumé aussitôt.
+     */
+    private val screenOff = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: android.content.Context, i: Intent) {
+            val justWoke = System.currentTimeMillis() - wokeAtMs < 1_500
+            if ((asleep || justWoke) && prefs.mode == Prefs.Mode.HARDWARE) {
+                app.log.write("écran", "extinction par Android après le bouton : écran rallumé")
+                Thread { RootShell.run("input keyevent 224", 5_000) }.start()
+            }
+        }
+    }
     private var swallowTouch = false
     private var lastWeight = Int.MIN_VALUE
     private val sleepTimer = Runnable { sleep() }
@@ -180,6 +200,7 @@ class MainActivity : Activity() {
     /** Rallume l'écran si besoin et relance le délai de veille. */
     fun wake() {
         if (asleep) {
+            wokeAtMs = System.currentTimeMillis()
             if (!snapshot.ready) machine.reconnect()
             asleep = false
             sleepView.visibility = View.GONE
@@ -230,6 +251,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(screenOff) } catch (_: Exception) {}
         tone?.release()
         super.onDestroy()
     }
