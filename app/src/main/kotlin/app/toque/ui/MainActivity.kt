@@ -83,6 +83,8 @@ class MainActivity : Activity() {
         sleepView = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK); visibility = View.GONE }
         root.addView(sleepView, Ui.flp())
         setContentView(root)
+        // Après un arrêt brutal pendant la veille, le rétroéclairage pourrait être resté coupé.
+        if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.on()
 
         try {
             tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
@@ -156,6 +158,8 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         main.removeCallbacks(sleepTimer)
+        // Toque passe en arrière-plan pendant la veille : l'écran doit se rallumer pour l'autre appli.
+        if (asleep) wake()
         super.onPause()
     }
 
@@ -180,6 +184,7 @@ class MainActivity : Activity() {
             asleep = false
             sleepView.visibility = View.GONE
             brightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+            if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.on()
         }
         main.removeCallbacks(sleepTimer)
         val minutes = prefs.sleepMinutes
@@ -193,6 +198,8 @@ class MainActivity : Activity() {
         sleepView.visibility = View.VISIBLE
         sleepView.bringToFront()
         brightness(0f)
+        // Android ne descend pas sous la luminosité minimale : on coupe le rétroéclairage lui-même.
+        if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.off()
     }
 
     private fun brightness(v: Float) {
