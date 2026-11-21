@@ -256,7 +256,7 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
     private fun finish(r: LidlSync.Report): LidlSync.Report {
         val stamp = SimpleDateFormat(tr("dd/MM à HH:mm"), I18n.locale).format(Date())
         prefs.lastSyncMs = System.currentTimeMillis()
-        prefs.lastSyncResult = "$stamp : ${r.message}"
+        prefs.lastSyncResult = "$stamp · ${r.message}"
         log.write("synchro", r.message)
         return r
     }
