@@ -4,35 +4,30 @@ import app.toque.core.machine.RootShell
 import java.util.concurrent.Executors
 
 /**
- * Hintergrundlicht direkt über den Treiber (root) : une luminosité de fenêtre à 0 est relevée par
- * Android au minimum autorisé, l'écran reste donc éclairé. Pour la veille de Toque, on écrit 0 dans
- * le fichier du rétroéclairage, puis on remet la valeur d'avant au réveil.
+ * Veille de l'écran du robot (root).
+ *
+ * [androidSleep] met Android en veille comme la touche Marche/Arrêt : le bouton du robot le rallume
+ * ensuite par son pilote. On n'écrit plus dans le fichier du rétroéclairage : un 0 écrit à la main
+ * empêchait le bouton de rallumer l'écran (voir MainActivity). [repair] remet seulement un
+ * rétroéclairage resté à 0 par une ancienne version.
  */
 object Backlight {
     private val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "toque-ecran") }
-    private const val FIND = "for f in /sys/class/leds/lcd-backlight/brightness /sys/class/backlight/*/brightness; " +
-        "do [ -w \$f ] && { echo \$f; break; }; done"
-    @Volatile private var saved: String? = null
+    private const val LED = "/sys/class/leds/lcd-backlight/brightness"
 
-    @Volatile private var dark = false
+    /*
+     * Touche Marche/Arrêt injectée sur le clavier du robot : « sendevent » est immédiat, « input
+     * keyevent 26 » met plusieurs secondes à démarrer sur ce processeur (secours seulement).
+     */
+    private const val POWER = "D=; for e in /dev/input/event*; do " +
+        "n=\$(cat /sys/class/input/\${e##*/}/device/name 2>/dev/null); [ \"\$n\" = mtk-kpd ] && D=\$e; done; " +
+        "if [ -n \"\$D\" ]; then sendevent \$D 1 116 1; sendevent \$D 0 0 0; sendevent \$D 1 116 0; sendevent \$D 0 0 0; " +
+        "else input keyevent 26; fi"
 
-    fun off() = exec.execute {
-        dark = true
-        val r = RootShell.run("F=\$($FIND); [ -n \"\$F\" ] && cat \$F && echo 0 > \$F", 5_000)
-        val v = r.out.trim().lines().firstOrNull()?.trim()
-        if (!v.isNullOrEmpty() && v != "0") saved = v
-        // Un fondu d'Android encore en cours pourrait réécrire une valeur : on recoupe une fois.
-        try { Thread.sleep(2_000) } catch (_: InterruptedException) {}
-        if (dark) RootShell.run("F=\$($FIND); [ -n \"\$F\" ] && echo 0 > \$F", 5_000)
-    }
+    fun androidSleep() = exec.execute { RootShell.run(POWER, 10_000) }
 
-    fun on() {
-        dark = false
-        exec.execute { restore() }
-    }
-
-    private fun restore() {
-        val v = saved ?: RootShell.run("settings get system screen_brightness", 5_000).out.trim().takeIf { it.toIntOrNull() != null } ?: "128"
-        RootShell.run("F=\$($FIND); [ -n \"\$F\" ] && echo $v > \$F", 5_000)
+    fun repair() = exec.execute {
+        RootShell.run("[ -w $LED ] && [ \"\$(cat $LED)\" = 0 ] && " +
+            "{ v=\$(settings get system screen_brightness); case \$v in ''|*[!0-9]*|0) v=128;; esac; echo \$v > $LED; }", 10_000)
     }
 }

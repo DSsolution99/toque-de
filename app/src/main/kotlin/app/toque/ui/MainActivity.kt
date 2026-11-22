@@ -7,7 +7,6 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -84,9 +83,8 @@ class MainActivity : Activity() {
         sleepView = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK); visibility = View.GONE }
         root.addView(sleepView, Ui.flp())
         setContentView(root)
-        registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
-        // Après un arrêt brutal pendant la veille, le rétroéclairage pourrait être resté coupé.
-        if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.on()
+        // Les versions 1.2.5 à 1.2.11 coupaient le rétroéclairage elles-mêmes : s'il est resté à 0, on le rallume.
+        if (hardware) Backlight.repair()
 
         try {
             tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
@@ -137,19 +135,13 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         unsubscribe = app.machine.onSnapshot { s ->
-            // Programme en cours ou poids qui change (on pèse) : l'écran reste allumé.
-            when {
-                s.busy -> wake("programme en cours")
-                // En veille, la balance dérive un peu (chaleur, vibrations) : il faut un vrai poids posé,
-                // au moins 10 g de plus ou de moins qu'à l'extinction, sur deux mesures de suite.
-                asleep -> {
-                    val moved = sleepWeight != Int.MIN_VALUE && Math.abs(s.weightG - sleepWeight) >= 10
-                    if (moved && weightMoves++ >= 1) wake("poids ${sleepWeight} g → ${s.weightG} g")
-                    if (!moved) weightMoves = 0
-                }
-                lastWeight != Int.MIN_VALUE && Math.abs(s.weightG - lastWeight) >= 5 -> wake()
+            // Programme en cours ou vrai poids posé (on pèse) : l'écran reste allumé. La balance oscille
+            // au repos (−15 ↔ −20 g) : on compare à une référence, avec 20 g d'écart au moins.
+            if (s.busy) wake("programme en cours")
+            else if (weightRef == Int.MIN_VALUE || Math.abs(s.weightG - weightRef) >= 20) {
+                if (weightRef != Int.MIN_VALUE && !knobRecently()) wake("poids ${weightRef} g → ${s.weightG} g")
+                weightRef = s.weightG
             }
-            lastWeight = s.weightG
             topBar.update(s)
             machineBar.update(s)
             stack.lastOrNull()?.onSnapshot(s)
@@ -171,90 +163,81 @@ class MainActivity : Activity() {
     override fun onPause() {
         main.removeCallbacks(sleepTimer)
         main.removeCallbacks(longPress)
-        // Toque passe en arrière-plan pendant la veille : l'écran doit se rallumer pour l'autre appli.
-        if (asleep) wake()
+        // Sans le robot : Toque passe en arrière-plan pendant sa veille, l'écran doit se rallumer pour l'autre appli.
+        // Sur le robot, la pause vient en général de la veille d'Android elle-même : rien à rallumer.
+        if (asleep && !hardware) wake()
         super.onPause()
     }
 
     // ------------------------------------------------------------------ veille de l'écran
 
     /*
-     * Le robot n'a pas de bouton marche/arrêt : si Android éteignait vraiment l'écran, un toucher ne
-     * le rallumerait pas forcément. Toque garde donc l'écran actif mais, après quelques minutes sans
-     * action (et sans programme en cours), affiche un écran noir et coupe le rétroéclairage.
-     * Un toucher (absorbé) ou le bouton rotatif le rallume.
+     * Veille sur le robot : Toque met vraiment Android en veille (touche Marche/Arrêt simulée), comme
+     * l'appli d'origine. Le pilote du bouton (« mtk-kpd ») envoie lui-même la touche Marche/Arrêt
+     * quand on appuie sur le bouton pendant la veille d'Android, ce qui la rallume. Le processeur dort.
+     *
+     * Mesuré sur le robot (journal 22/11/2026) : si l'on coupe seulement le rétroéclairage (0) sans
+     * mettre Android en veille, le pilote envoie Marche/Arrêt au relâchement du bouton et Android
+     * s'endort au lieu de se rallumer ; et si Android dort avec le rétroéclairage à 0, le bouton ne
+     * le rallume plus du tout. On ne touche donc plus au rétroéclairage.
+     *
+     * Sans le robot (simulateur), l'ancienne veille reste : écran noir par-dessus, luminosité à 0.
      */
     private lateinit var sleepView: FrameLayout
     private var asleep = false
-    /** Dernier réveil de la veille de Toque (horloge système). */
-    private var wokeAtMs = 0L
+    private var swallowTouch = false
+    private val hardware get() = prefs.mode == Prefs.Mode.HARDWARE
+    /** Poids de référence pour la balance (voir [onStart]). */
+    private var weightRef = Int.MIN_VALUE
+    /** Dernier évènement du bouton : appuyer dessus pèse sur la balance (jusqu'à 2 kg mesurés). */
+    private var knobAtMs = 0L
+    private fun knobRecently() = System.currentTimeMillis() - knobAtMs < 3_000
+    private val sleepTimer = Runnable { sleep("délai écoulé") }
 
     /*
-     * Le pilote du clavier du robot (« mtk-kpd ») envoie aussi la touche Marche/Arrêt quand on appuie
-     * sur le bouton pendant que le rétroéclairage est coupé : Android éteignait alors l'écran juste
-     * après que Toque l'avait rallumé. Un écran éteint par Android pendant la veille de Toque ou dans
-     * la seconde et demie qui suit son réveil est donc rallumé aussitôt.
+     * Appui long sur le bouton (1 s) : veille au relâchement. Au relâchement, pas pendant l'appui : si
+     * Android dormait déjà, le pilote enverrait Marche/Arrêt au relâchement et le rallumerait aussitôt.
      */
-    private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: android.content.Context, i: Intent) {
-            val justWoke = System.currentTimeMillis() - wokeAtMs < 1_500
-            if ((asleep || justWoke) && prefs.mode == Prefs.Mode.HARDWARE) {
-                app.log.write("écran", "extinction par Android après le bouton : écran rallumé")
-                // Verrou qui rallume l'écran tout de suite (sans root : la commande « input » mettait 4 s).
-                val pm = getSystemService(POWER_SERVICE) as PowerManager
-                @Suppress("DEPRECATION")
-                pm.newWakeLock(PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                    PowerManager.ON_AFTER_RELEASE, "toque:reveil").acquire(1_000)
-            }
-        }
-    }
-    private var swallowTouch = false
-    private var lastWeight = Int.MIN_VALUE
-    /** Poids à l'extinction, et nombre de mesures de suite qui s'en écartent. */
-    private var sleepWeight = Int.MIN_VALUE
-    private var weightMoves = 0
-    private val sleepTimer = Runnable { sleep() }
-
-    /* Appui long sur le bouton (1 s) : mise en veille tout de suite. L'appui court agit au relâchement. */
+    private var pressDown = false
     private var longPressDone = false
     private val longPress = Runnable {
         longPressDone = true
-        app.log.write("écran", "veille demandée (appui long)")
-        sleep()
+        brightness(0.05f)  // signe que l'appui long est pris en compte
     }
 
     /** Rallume l'écran si besoin et relance le délai de veille. [reason] : noté au journal si l'écran était éteint. */
     fun wake(reason: String = "écran ou bouton") {
         if (asleep) {
             app.log.write("écran", "réveil : $reason")
-            wokeAtMs = System.currentTimeMillis()
             if (!snapshot.ready) machine.reconnect()
             asleep = false
             sleepView.visibility = View.GONE
-            brightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
-            if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.on()
         }
+        brightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
         main.removeCallbacks(sleepTimer)
         val minutes = prefs.sleepMinutes
         if (minutes > 0) main.postDelayed(sleepTimer, minutes * 60_000L)
     }
 
-    private fun sleep() {
+    private fun sleep(reason: String) {
         if (snapshot.busy) { wake(); return }
         hideKeyboard()
-        sleepWeight = snapshot.weightG
-        weightMoves = 0
-        app.log.write("écran", "veille")
+        app.log.write("écran", "veille : $reason")
         asleep = true
-        sleepView.visibility = View.VISIBLE
-        sleepView.bringToFront()
-        // Sur le robot : rétroéclairage coupé directement. Pas de luminosité de fenêtre à 0 en plus :
-        // Android l'atteindrait en fondu et réécrirait son minimum (10) après notre 0.
-        if (prefs.mode == Prefs.Mode.HARDWARE) Backlight.off() else brightness(0f)
+        main.removeCallbacks(sleepTimer)
+        if (hardware) {
+            brightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+            Backlight.androidSleep()
+        } else {
+            sleepView.visibility = View.VISIBLE
+            sleepView.bringToFront()
+            brightness(0f)
+        }
     }
 
     private fun brightness(v: Float) {
         val lp = window.attributes
+        if (lp.screenBrightness == v) return
         lp.screenBrightness = v
         window.attributes = lp
     }
@@ -281,7 +264,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        try { unregisterReceiver(screenOff) } catch (_: Exception) {}
         tone?.release()
         super.onDestroy()
     }
@@ -359,24 +341,29 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ bouton rotatif
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        knobAtMs = System.currentTimeMillis()
         if (asleep) {
-            // Le bouton encore tenu après l'appui long ne doit pas rallumer l'écran.
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && !longPressDone) wake("bouton (touche ${event.keyCode})")
-            if (event.action == KeyEvent.ACTION_UP) longPressDone = false
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) wake("bouton (touche ${event.keyCode})")
+            pressDown = false
             return true
         }
-        if (event.action == KeyEvent.ACTION_DOWN) wake()
+        // Les répétitions d'une touche tenue ne relancent rien (elles annuleraient l'assombrissement de l'appui long).
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) wake()
+        if (event.repeatCount > 0 && isKnobPress(event.keyCode)) return true
         if (knobListener == null && isKnobPress(event.keyCode)) {
             when {
                 event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
+                    pressDown = true
                     longPressDone = false
                     main.removeCallbacks(longPress)
                     main.postDelayed(longPress, 1_000)
                 }
-                event.action == KeyEvent.ACTION_UP -> {
+                // Un relâchement sans appui vu : c'est l'appui qui a réveillé Android, il ne fait rien d'autre.
+                event.action == KeyEvent.ACTION_UP && pressDown -> {
+                    pressDown = false
                     main.removeCallbacks(longPress)
-                    if (!longPressDone && overlay.visibility != View.VISIBLE) current?.onKnobPress()
-                    longPressDone = false
+                    if (longPressDone) { longPressDone = false; sleep("appui long") }
+                    else if (overlay.visibility != View.VISIBLE) current?.onKnobPress()
                 }
             }
             return true
