@@ -2,12 +2,12 @@ package app.toque.ui
 
 import android.app.Activity
 import android.content.Intent
-import app.toque.core.machine.RootShell
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -170,6 +170,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         main.removeCallbacks(sleepTimer)
+        main.removeCallbacks(longPress)
         // Toque passe en arrière-plan pendant la veille : l'écran doit se rallumer pour l'autre appli.
         if (asleep) wake()
         super.onPause()
@@ -199,7 +200,11 @@ class MainActivity : Activity() {
             val justWoke = System.currentTimeMillis() - wokeAtMs < 1_500
             if ((asleep || justWoke) && prefs.mode == Prefs.Mode.HARDWARE) {
                 app.log.write("écran", "extinction par Android après le bouton : écran rallumé")
-                Thread { RootShell.run("input keyevent 224", 5_000) }.start()
+                // Verrou qui rallume l'écran tout de suite (sans root : la commande « input » mettait 4 s).
+                val pm = getSystemService(POWER_SERVICE) as PowerManager
+                @Suppress("DEPRECATION")
+                pm.newWakeLock(PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE, "toque:reveil").acquire(1_000)
             }
         }
     }
@@ -209,6 +214,14 @@ class MainActivity : Activity() {
     private var sleepWeight = Int.MIN_VALUE
     private var weightMoves = 0
     private val sleepTimer = Runnable { sleep() }
+
+    /* Appui long sur le bouton (1 s) : mise en veille tout de suite. L'appui court agit au relâchement. */
+    private var longPressDone = false
+    private val longPress = Runnable {
+        longPressDone = true
+        app.log.write("écran", "veille demandée (appui long)")
+        sleep()
+    }
 
     /** Rallume l'écran si besoin et relance le délai de veille. [reason] : noté au journal si l'écran était éteint. */
     fun wake(reason: String = "écran ou bouton") {
@@ -347,10 +360,27 @@ class MainActivity : Activity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (asleep) {
-            if (event.action == KeyEvent.ACTION_DOWN) wake("bouton (touche ${event.keyCode})")
+            // Le bouton encore tenu après l'appui long ne doit pas rallumer l'écran.
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && !longPressDone) wake("bouton (touche ${event.keyCode})")
+            if (event.action == KeyEvent.ACTION_UP) longPressDone = false
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN) wake()
+        if (knobListener == null && isKnobPress(event.keyCode)) {
+            when {
+                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
+                    longPressDone = false
+                    main.removeCallbacks(longPress)
+                    main.postDelayed(longPress, 1_000)
+                }
+                event.action == KeyEvent.ACTION_UP -> {
+                    main.removeCallbacks(longPress)
+                    if (!longPressDone && overlay.visibility != View.VISIBLE) current?.onKnobPress()
+                    longPressDone = false
+                }
+            }
+            return true
+        }
         knobListener?.let { l ->
             if (event.action == KeyEvent.ACTION_DOWN) l(event)
             return true
@@ -376,6 +406,10 @@ class MainActivity : Activity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    /** Appui du bouton du robot (F5 ou la touche apprise) ; pas les touches Entrée/centre d'un clavier. */
+    private fun isKnobPress(k: Int): Boolean =
+        prefs.knobPress.let { if (it >= 0) it == k && k != KeyEvent.KEYCODE_ENTER && k != KeyEvent.KEYCODE_DPAD_CENTER else k == KeyEvent.KEYCODE_F5 }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         if (asleep) {
