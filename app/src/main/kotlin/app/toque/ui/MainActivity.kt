@@ -115,7 +115,7 @@ class MainActivity : Activity() {
         intent.removeExtra(EXTRA_OPEN_RECIPE)
         val servings = intent.getIntExtra(EXTRA_SERVINGS, 0)
         val recipe = app.recipes.get(id) ?: return
-        wake()
+        wake("recette envoyée du téléphone")
         if (snapshot.busy) {
             toast(tr("Recette « %s » reçue du téléphone : terminez d'abord le programme en cours", recipe.title), Ui.WARN)
             return
@@ -138,7 +138,17 @@ class MainActivity : Activity() {
         super.onStart()
         unsubscribe = app.machine.onSnapshot { s ->
             // Programme en cours ou poids qui change (on pèse) : l'écran reste allumé.
-            if (s.busy || (lastWeight != Int.MIN_VALUE && Math.abs(s.weightG - lastWeight) >= 5)) wake()
+            when {
+                s.busy -> wake("programme en cours")
+                // En veille, la balance dérive un peu (chaleur, vibrations) : il faut un vrai poids posé,
+                // au moins 10 g de plus ou de moins qu'à l'extinction, sur deux mesures de suite.
+                asleep -> {
+                    val moved = sleepWeight != Int.MIN_VALUE && Math.abs(s.weightG - sleepWeight) >= 10
+                    if (moved && weightMoves++ >= 1) wake("poids ${sleepWeight} g → ${s.weightG} g")
+                    if (!moved) weightMoves = 0
+                }
+                lastWeight != Int.MIN_VALUE && Math.abs(s.weightG - lastWeight) >= 5 -> wake()
+            }
             lastWeight = s.weightG
             topBar.update(s)
             machineBar.update(s)
@@ -150,7 +160,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        wake()
+        wake("retour à Toque")
         if (!snapshot.ready && prefs.mode == Prefs.Mode.HARDWARE) machine.reconnect()
         immersive()
         prefs.returnBubble = false
@@ -195,11 +205,15 @@ class MainActivity : Activity() {
     }
     private var swallowTouch = false
     private var lastWeight = Int.MIN_VALUE
+    /** Poids à l'extinction, et nombre de mesures de suite qui s'en écartent. */
+    private var sleepWeight = Int.MIN_VALUE
+    private var weightMoves = 0
     private val sleepTimer = Runnable { sleep() }
 
-    /** Rallume l'écran si besoin et relance le délai de veille. */
-    fun wake() {
+    /** Rallume l'écran si besoin et relance le délai de veille. [reason] : noté au journal si l'écran était éteint. */
+    fun wake(reason: String = "écran ou bouton") {
         if (asleep) {
+            app.log.write("écran", "réveil : $reason")
             wokeAtMs = System.currentTimeMillis()
             if (!snapshot.ready) machine.reconnect()
             asleep = false
@@ -215,6 +229,9 @@ class MainActivity : Activity() {
     private fun sleep() {
         if (snapshot.busy) { wake(); return }
         hideKeyboard()
+        sleepWeight = snapshot.weightG
+        weightMoves = 0
+        app.log.write("écran", "veille")
         asleep = true
         sleepView.visibility = View.VISIBLE
         sleepView.bringToFront()
@@ -232,7 +249,7 @@ class MainActivity : Activity() {
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (asleep) {
             // Le toucher qui réveille ne doit rien déclencher dessous.
-            if (ev.actionMasked == MotionEvent.ACTION_DOWN) { wake(); swallowTouch = true }
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN) { wake("toucher"); swallowTouch = true }
             return true
         }
         if (swallowTouch) {
@@ -330,7 +347,7 @@ class MainActivity : Activity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (asleep) {
-            if (event.action == KeyEvent.ACTION_DOWN) wake()
+            if (event.action == KeyEvent.ACTION_DOWN) wake("bouton (touche ${event.keyCode})")
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN) wake()
@@ -362,7 +379,7 @@ class MainActivity : Activity() {
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         if (asleep) {
-            if (event.action == MotionEvent.ACTION_SCROLL) wake()
+            if (event.action == MotionEvent.ACTION_SCROLL) wake("bouton tourné")
             return true
         }
         if (event.action == MotionEvent.ACTION_SCROLL) wake()
@@ -381,7 +398,7 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ évènements machine
 
     private fun onMachineEvent(e: MachineEvent) {
-        wake()
+        wake("robot : ${e.type}")
         current?.onEvent(e)
         when (e.type) {
             EventType.JOB_FINISHED -> chime(2)
